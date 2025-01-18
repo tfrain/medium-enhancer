@@ -5,12 +5,6 @@ function IndexPopup() {
 
   useEffect(() => {
     // Load and execute the content script
-    const script = document.createElement('script')
-    script.src = chrome.runtime.getURL('content/index.js')
-    script.onload = () => {
-      script.remove()
-    }
-    document.body.appendChild(script)
   }, [])
 
   return (

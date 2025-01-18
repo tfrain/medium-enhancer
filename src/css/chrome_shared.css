@@ -22,11 +22,28 @@ html.loading * {
 }
 
 body {
-  cursor: default;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
   margin: 0;
-  font-family:'Segoe UI', Tahoma, sans-serif;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
   font-size: 75%;
-  color:rgb(48, 57, 66)
+  color: rgb(48, 57, 66);
+}
+
+body>.main-container {
+  max-width: 800px;
+  margin: 50px auto;
+}
+
+header {
+  margin: 0 auto 50px auto;
+  font-size: 36px;
+}
+
+#status {
+  color: green;
 }
 
 p {
@@ -109,22 +126,26 @@ html[dir='rtl'] .weakrtl input::-webkit-input-placeholder {
 }
 
 /* Horizontal line */
-hr{
-    border:0;
-    height:0;
-    border-top:1px solid rgba(0, 0, 0, 0.1);
-    border-bottom:1px solid rgba(255, 255, 255, 0.1)
+hr {
+  border: 0;
+  height: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1)
 }
+
 /* Different sizes */
-.small{
-    font-size:11px
+.small {
+  font-size: 11px
 }
-.large{
-    font-size:18px
+
+.large {
+  font-size: 18px
 }
-.x-large{
-    font-size:24px
+
+.x-large {
+  font-size: 24px
 }
-.xx-large{
-    font-size:30px
+
+.xx-large {
+  font-size: 30px
 }

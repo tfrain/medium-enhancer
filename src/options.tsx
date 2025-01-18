@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Helmet } from "react-helmet";
+import './css/chrome_shared.css';
 
 const Options = () => {
-	const [autoType, setAutoType] = useState("0");
+	const [autoType, setAutoType] = useState("2");
 	const [showTip, setShowTip] = useState(true);
 	const [rememberPos, setRememberPos] = useState(true);
 	const [statusMessage, setStatusMessage] = useState("");
@@ -11,70 +11,63 @@ const Options = () => {
 	const [isModified, setIsModified] = useState(false);
 
 	const [selectorInoreader, setSelectorInoreader] = useState(".article_content");
-	const [selectorFeedly, setSelectorFeedly] = useState(".entryBody");
 	const [tempSelectorInoreader, setTempSelectorInoreader] = useState(selectorInoreader);
-	const [tempSelectorFeedly, setTempSelectorFeedly] = useState(selectorFeedly);
 
 	useEffect(() => {
-		// Restore options from chrome.storage
 		chrome.storage.local.get(
 			{
 				isShowTip: showTip,
 				isRememberPos: rememberPos,
 				autoType: autoType,
 				selectorInoreader: selectorInoreader,
-				selectorFeedly: selectorFeedly,
 			},
 			(items) => {
 				setShowTip(items.isShowTip);
 				setRememberPos(items.isRememberPos);
 				setAutoType(items.autoType);
 				setSelectorInoreader(items.selectorInoreader);
-				setSelectorFeedly(items.selectorFeedly);
-
 				setTempSelectorInoreader(items.selectorInoreader);
-				setTempSelectorFeedly(items.selectorFeedly);
 
+				// 每次设置完毕，展示时都会走到这里逻辑，而下面的设置在第一次打开时不会触发
 				setIsFirstLoad(false);
 				setIsResetLoad(false);
 			}
 		);
 	}, []);
 
-	// 异步监听配置的更新，保存每次最新更新的内容
+	// 因为有变量，当变量变化时，会触发这里的逻辑
 	useEffect(() => {
-		// Save options whenever they change
-		if (!isFirstLoad && !isResetLoad && isModified) {
+		if (!isFirstLoad && isModified) {
 			chrome.storage.local.set({
 				isShowTip: showTip,
 				isRememberPos: rememberPos,
 				autoType: autoType,
 				selectorInoreader: selectorInoreader,
-				selectorFeedly: selectorFeedly,
 			}, () => {
-				setStatusMessage("Options saved"); // 设置提示信息
-				setIsFirstLoad(true);
+				if (!isResetLoad) {
+					setStatusMessage("Options saved"); // 设置提示信息
+				}
+				// setIsFirstLoad(true);
 				setIsModified(false);
-				setTimeout(() => {
-					setStatusMessage("");
-					setIsFirstLoad(false);
-				}, 4000);
+				setIsResetLoad(false);
+				// setTimeout(() => {
+				// 	setStatusMessage("");
+				// 	setIsFirstLoad(false);
+				// }, 3000);
 			});
 		}
-	}, [showTip, rememberPos, autoType, selectorInoreader, selectorFeedly, isModified]);
+	}, [showTip, rememberPos, autoType, selectorInoreader, isModified]);
 
 	const resetOptions = () => {
-		// Clear storage and restore defaults
 		chrome.storage.local.clear(() => {
+			setIsResetLoad(true);
+			setIsModified(true);
+
 			setShowTip(true);
 			setRememberPos(true);
-			setAutoType("0");
+			setAutoType("2");
 			setSelectorInoreader(".article_content");
-			setSelectorFeedly(".entryBody");
 			setTempSelectorInoreader(".article_content");
-			setTempSelectorFeedly(".entryBody");
-			setIsResetLoad(true);
-			setIsModified(false);
 			setStatusMessage("Reset saved");
 		});
 	};
@@ -87,31 +80,29 @@ const Options = () => {
 		}
 	};
 
-	const handleKeyDownFeedly = (event) => {
-		if (event.key === 'Enter') {
-			event.preventDefault();
-			setSelectorFeedly(tempSelectorFeedly);
-			setIsModified(true);
-		}
+	// const handleKeyDownMedium = (event) => {
+	// 	if (event.key === 'Enter') {
+	// 		event.preventDefault();
+	// 		setIsModified(true);
+	// 	}
+	// };
+
+	const handleTweetClick = (event) => {
+		event.preventDefault();
+		const text = encodeURIComponent("发现一个超棒的 #chrome extension(Medium Enhancer)，它能智能展示文章目录，支持 #Inoreader 和 #Medium");
+		const via = encodeURIComponent("WesleyWei0316");
+		const related = encodeURIComponent("compzets");
+		const url = encodeURIComponent("https://github.com/lcomplete/smart-toc");
+		window.open(
+			`https://twitter.com/intent/tweet?text=${text}&via=${via}&related=${related}&url=${url}`,
+			"_blank"
+		);
 	};
 
 	return (
 		<div className="main-container">
-			<Helmet>
-				<title>Simple Outliner</title>
-				<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-				<meta http-equiv="Content-Security-Policy" content="script-src 'self';object-src 'self';script-src-elem 'self' 'unsafe-inline' https://platform.twitter.com https://syndication.twitter.com;" />
-				<link rel="stylesheet" href="css/chrome_shared.css" />
-				<style>
-					{`
-						body>.main-container{max-width:800px;margin:50px auto}
-						header{margin:0 auto 50px auto;font-size:36px}
-						#status{color:green;}
-					`}
-				</style>
-			</Helmet>
 			<header>
-				Simple Outliner
+				Medium Enhancer Options
 			</header>
 
 			<h1>Auto Load</h1>
@@ -143,7 +134,7 @@ const Options = () => {
 							setAutoType(e.target.value);
 							setIsModified(true);
 						}} />
-					<label htmlFor="auto-2">Inoreader and Feedly Web App</label>
+					<label htmlFor="auto-2">Inoreader and Medium</label>
 				</div>
 			</div>
 
@@ -169,7 +160,7 @@ const Options = () => {
 				</label>
 			</div>
 
-			<h1>Inoreader and Feedly Support</h1>
+			<h1>Inoreader Support</h1>
 			<hr />
 			<div> <span style={{ color: 'red' }}> Don't change this unless the web apps change its dom.</span>
 			</div>
@@ -178,11 +169,11 @@ const Options = () => {
 				onChange={(e) => {
 					setTempSelectorInoreader(e.target.value);
 				}} />
-			<h3>Feedly article querySelector</h3>
-			<input type="text" id="selector-feedly" value={tempSelectorFeedly} onKeyDown={handleKeyDownFeedly}
+			{/* <h3>Medium article querySelector</h3>
+			<input type="text" id="selector-medium" value={tempSelectorMedium} onKeyDown={handleKeyDownMedium}
 				onChange={(e) => {
-					setTempSelectorFeedly(e.target.value);
-				}} />
+					setTempSelectorMedium(e.target.value);
+				}} /> */}
 
 			<br />
 			<br />
@@ -193,11 +184,10 @@ const Options = () => {
 			<br />
 			<br />
 			<br />
-			<div>If you like this extension, no need to buy me a coffee, just share to people who need this.</div>
+			<div>If you like this extension, just share to people who need this.</div>
 			<br />
 			<div className="social-buttons fr">
-				<a href="https://twitter.com/share" className="twitter-share-button" data-via="lcomplete_wild" data-text="发现一个超棒的 #浏览器扩展（Smart TOC / 智能网页大纲），它能智能展示文章目录，支持 #Inoreader 和 #Feedly，而且它还是 #开源 免费的，快来升级你的上网体验吧！" data-related="compzets" data-hashtags="" data-url="https://github.com/lcomplete/smart-toc">Tweet</a>
-				<script src="twitter_widgets.js" id="twitter-wjs"></script>
+				<a href="emmm" className="twitter-share-button" onClick={handleTweetClick}>Tweet</a>
 			</div>
 			<br />
 			<br />
@@ -206,7 +196,7 @@ const Options = () => {
 			<p>
 				Original &#9829; by <a href="https://github.com/FallenMax/smart-toc" target="_blank">FallenMax</a>
 				<br />
-				Modified &#9829; by <a href="https://twitter.com/lcomplete_wild" target="_blank">lcomplete</a>
+				Modified &#9829; by <a href="https://wesley-wei.medium.com/" target="_blank">WesleyWei</a>
 			</p>
 			<br />
 			<br />

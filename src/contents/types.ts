@@ -1,3 +1,13 @@
+import type { PlasmoCSConfig } from "plasmo"
+
+export const config: PlasmoCSConfig = {
+  matches: [
+    "http://*/*",
+    "https://*/*"
+  ],
+  run_at: "document_end",
+}
+
 export type Rect = {
   top: number
   left: number
@@ -47,7 +57,7 @@ export interface Offset {
 
 declare global {
   interface Window {
-    MutationObserver:any;
-    WebKitMutationObserver:any;
+    MutationObserver: any;
+    WebKitMutationObserver: any;
   }
 }

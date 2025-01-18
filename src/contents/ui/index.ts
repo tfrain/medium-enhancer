@@ -5,6 +5,15 @@ import { addCSS } from '../util/dom/css'
 import { Stream } from '../util/stream'
 import { Handle } from './handle'
 import { TocContent } from './toc_content'
+import type { PlasmoCSConfig } from "plasmo"
+
+export const config: PlasmoCSConfig = {
+  matches: [
+    "http://*/*",
+    "https://*/*"
+  ],
+  run_at: "document_end",
+}
 
 const ROOT_ID = 'smarttoc-wrapper'
 const CSS_ID = 'smarttoc__css'

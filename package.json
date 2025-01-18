@@ -5,7 +5,7 @@
   "description": "Enhance your Medium experience with features like TOC (Table of Contents) and RSS support.",
   "author": "Wesley Wei",
   "scripts": {
-    "dev": "plasmo dev",
+    "dev": "rm -rf ./build/chrome-mv3-dev && plasmo dev",
     "build": "plasmo build",
     "package": "plasmo package"
   },
@@ -27,6 +27,7 @@
   },
   "manifest": {
     "host_permissions": [
+      "http://*/*",
       "https://*/*"
     ],
     "commands": {
