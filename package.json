@@ -1,8 +1,8 @@
 {
-  "name": "facebook-group-members-extractor",
-  "displayName": "Facebook group members extractor",
+  "name": "medium-enhancer",
+  "displayName": "medium-enhancer",
   "version": "0.0.1",
-  "description": "just for fun",
+  "description": "Enhance your Medium experience with features like TOC (Table of Contents) and RSS support.",
   "author": "Wesley Wei",
   "scripts": {
     "dev": "plasmo dev",
@@ -10,13 +10,15 @@
     "package": "plasmo package"
   },
   "dependencies": {
-    "plasmo": "0.85.2",
+    "plasmo": "0.89.4",
     "react": "18.2.0",
-    "react-dom": "18.2.0"
+    "react-dom": "18.2.0",
+    "mithril": "^2.0.4"
   },
   "devDependencies": {
     "@ianvs/prettier-plugin-sort-imports": "4.1.1",
     "@types/chrome": "0.0.258",
+    "@types/mithril": "^2.0.8",
     "@types/node": "20.11.5",
     "@types/react": "18.2.48",
     "@types/react-dom": "18.2.18",
@@ -27,8 +29,32 @@
     "host_permissions": [
       "https://*/*"
     ],
+    "commands": {
+      "toggle": {
+        "suggested_key": {
+          "default": "Ctrl+Shift+E",
+          "mac": "Command+Shift+E",
+          "chromeos": "Ctrl+Shift+E",
+          "linux": "Ctrl+Shift+E"
+        },
+        "description": "Load/unload TOC"
+      },
+      "prev": {
+        "description": "Jump to previous heading"
+      },
+      "next": {
+        "description": "Jump to next heading"
+      }
+    },
     "permissions": [
-      "tabs"
-    ]
+      "activeTab",
+      "storage",
+      "contextMenus",
+      "scripting"
+    ],
+    "content_security_policy": {
+      "extension_pages": "script-src 'self';object-src 'self';script-src-elem 'self' 'unsafe-inline' https://platform.twitter.com https://syndication.twitter.com;"
+    },
+    "author": "cwei3790@gmail.com"
   }
 }

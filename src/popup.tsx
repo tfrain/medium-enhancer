@@ -1,20 +1,32 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 function IndexPopup() {
   const [data, setData] = useState("")
+
+  useEffect(() => {
+    // Load and execute the content script
+    const script = document.createElement('script')
+    script.src = chrome.runtime.getURL('content/index.js')
+    script.onload = () => {
+      script.remove()
+    }
+    document.body.appendChild(script)
+  }, [])
 
   return (
     <div
       style={{
         display: "flex",
         flexDirection: "column",
-        padding: 16
+        padding: 16,
+        width: "600px",  // 整体宽度
+        fontSize: "20px"  // 默认字体大小
       }}>
       <h1>
-        Welcome to your <a href="https://www.plasmo.com">Plasmo</a> Extension!
+        Welcome to my <a href="https://www.plasmo.com">buttons</a> Extension!
       </h1>
       <input onChange={(e) => setData(e.target.value)} value={data} />
-      <footer>Crafted by @PlamoHQ</footer>
+      <footer>Crafted by @WesleyWei</footer>
     </div>
   )
 }
