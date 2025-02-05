@@ -293,6 +293,7 @@ export function createToc(options: {
 
   const $topbarHeight = topbarStream($triggerTopbarMeasure, scroller).log('topbarHeight')
 
+  // 参数是通过对象解构传递的，因此顺序无关紧要。
   const $content = contentStream({
     $triggerContentChange,
     $periodicCheck,

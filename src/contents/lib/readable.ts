@@ -7,7 +7,7 @@ import { toArray } from '../util/dom/to_array'
 
 //-------------- container extender  --------------
 
-const EXTENDER_ID = 'smarttoc-extender'
+const EXTENDER_ID = 'mediumtoc-extender'
 const appendExtender = (content: Content, topbarHeight: number): void => {
   const { article, scroller, headings } = content
   let extender: HTMLElement | null = scroller.dom.querySelector(
@@ -64,9 +64,9 @@ const removeExtender = (): void => {
 
 //-------------- apply readable style --------------
 
-const DATASET_ARTICLE = 'smarttocArticle'
-const DATASET_ARTICLE__CAMELCASE = 'smarttoc-article'
-const DATASET_ORIGIN_STYLE = 'smarttocOriginStyle'
+const DATASET_ARTICLE = 'mediumtocArticle'
+const DATASET_ARTICLE__CAMELCASE = 'mediumtoc-article'
+const DATASET_ORIGIN_STYLE = 'mediumtocOriginStyle'
 
 const applyReadableStyle = (article: HTMLElement): void => {
   article.dataset[DATASET_ARTICLE] = '1'

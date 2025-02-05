@@ -40,7 +40,6 @@ function setPreference(preference, callback) {
   }
 }
 
-// 检查 URL 是否包含特定后缀
 function isValidUrl(url: string): boolean {
   const regex = /-[0-9a-z]{10,}$/;
   return regex.test(url);
@@ -67,7 +66,9 @@ if (window === getContentWindow()) {
     if (toc) {
       toc.dispose()
     }
-    if (isInoReaderCom || !isValidUrl(window.location.pathname)) {
+    // inoreader 和 medium 的主页不显示目录
+    // wwtd P2, 边界case。 medium 不提示 No article/headings are detected
+    if (isMediumOrInoreader && (isInoReaderCom || (isMediumCom && !isValidUrl(window.location.pathname)))) {
       return
     }
 
@@ -87,7 +88,6 @@ if (window === getContentWindow()) {
       article,
       preference,
     })
-    // 出现错误时，销毁目录
     toc.on('error', (error) => {
       if (toc) {
         toc.dispose()
@@ -148,7 +148,6 @@ if (window === getContentWindow()) {
       // 每 300 毫秒执行一次，2/3次时可能渲染目录，直至4次结束
       timeoutTrack = setInterval(() => {
         intervalCount++;
-        // medium 文章中会不断refresh，走不到这里，而主页会走到这里
         if (intervalCount === 4) { // 最多检测次数
           clearInterval(timeoutTrack) // 清除定时器
         }
@@ -204,15 +203,10 @@ if (window === getContentWindow()) {
       isNewArticleDetected = false
       if (isDebugging) {
         console.log('refresh')
-        // console.log(el)
       }
       articleId = el ? el.id : ''
       articleContentClass = el ? el.className : ''
-      // 这里的start 和 下面这段重复，有start 只是为了更快加载，当然要 isNewArticleDetected 为 false
-      // if (intervalCount > 1 && !isNewArticleDetected) {
-      //   detectToc() // 后续执行时，检测并渲染出目录
-      // }
-
+      // 1. 没有start 会导致目录不及时取消，有start 会导致no headings 展示出来，因为没加载完毕
       const observer = new MutationObserver((mutations, obs) => {
         const articleLoaded = document.querySelector(articleClass);
         if (articleLoaded) {
@@ -225,6 +219,7 @@ if (window === getContentWindow()) {
         childList: true,
         subtree: true
       });
+      // start();
     }
   }
 
@@ -232,9 +227,6 @@ if (window === getContentWindow()) {
   function detectToc() {
     const article = extractArticle()
     const headings = article && extractHeadings(article)
-    if (isMediumCom && toc) {
-      toc.dispose()
-    }
     if (article && headings && headings.length > 0) {
       setPreference(preference, () => {
         renderToc(article, headings)
@@ -249,17 +241,16 @@ if (window === getContentWindow()) {
   const container = document.getElementById("root") as HTMLElement | null;
   let mediumArticle = container != null && document.querySelector(selectorMedium) as HTMLElement || null
   let isMediumCom = dm.indexOf('medium.com') >= 0;
-  // wwtd P1, 部分 innoreader 目录无法展示。
   let isInoReaderCom = dm === 'inoreader.com' || dm === 'innoreader.com';
+  let isMediumOrInoreader = isInoReader || isMediumCom || mediumArticle !== null;
 
-  // 默认展示
   chrome.storage.local.get({
     autoType: '2'
   }, function (items) {
     if (items.autoType !== '0') { // 禁用
       let isAutoLoad = items.autoType === '1'; // 所有页面
       if (items.autoType === '2') {
-        isAutoLoad = isInoReader || isMediumCom || mediumArticle !== null;
+        isAutoLoad = isMediumOrInoreader;
       }
       // load 中会 start，也会调用 domListener
       if (isAutoLoad) {

@@ -92,7 +92,7 @@ const Options = () => {
 		const text = encodeURIComponent("发现一个超棒的 #chrome extension(Medium Enhancer)，它能智能展示文章目录，支持 #Inoreader 和 #Medium");
 		const via = encodeURIComponent("WesleyWei0316");
 		const related = encodeURIComponent("compzets");
-		const url = encodeURIComponent("https://github.com/lcomplete/smart-toc");
+		const url = encodeURIComponent("https://github.com/tfrain/medium-enhancer");
 		window.open(
 			`https://twitter.com/intent/tweet?text=${text}&via=${via}&related=${related}&url=${url}`,
 			"_blank"
@@ -191,7 +191,7 @@ const Options = () => {
 			</div>
 			<br />
 			<br />
-			Source Code: <a href="https://github.com/lcomplete/smart-toc" target="_blank">https://github.com/lcomplete/smart-toc</a>
+			Source Code: <a href="https://github.com/tfrain/medium-enhancer" target="_blank">https://github.com/tfrain/medium-enhancer</a>
 			<br />
 			<p>
 				Original &#9829; by <a href="https://github.com/FallenMax/smart-toc" target="_blank">FallenMax</a>

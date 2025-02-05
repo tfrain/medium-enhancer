@@ -56,7 +56,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.contextMenus.onClicked.addListener(function (item, tab) {
   if (item.menuItemId === 'position_menu') {
     if (chrome.storage) {
-      chrome.storage.local.set({ "smarttoc_offset": { x: 0, y: 0 } });
+      chrome.storage.local.set({ "mediumtoc_offset": { x: 0, y: 0 } });
       execOnCurrentTab('refresh')
     }
   }

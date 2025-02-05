@@ -15,8 +15,8 @@ export const config: PlasmoCSConfig = {
   run_at: "document_end",
 }
 
-const ROOT_ID = 'smarttoc-wrapper'
-const CSS_ID = 'smarttoc__css'
+const ROOT_ID = 'mediumtoc-wrapper'
+const CSS_ID = 'mediumtoc__css'
 
 const calcPlacement = function (article: Article): 'left' | 'right' {
   const { left, right } = article
@@ -139,7 +139,7 @@ export const ui = {
         }
 
         return m(
-          'nav#smarttoc',
+          'nav#mediumtoc',
           {
             class: isTooManyHeadings() ? 'lengthy' : '',
             style: calcStyle({

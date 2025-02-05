@@ -143,21 +143,23 @@ export const extractArticle = function (): HTMLElement | undefined {
 
   const dm = document.domain;
   const isInoReader = dm.indexOf('inoreader.com') >= 0 || dm.indexOf('innoreader.com') > 0;
-  const isFeedly = dm.indexOf('feedly.com') >= 0;
+  const container = document.getElementById("root") as HTMLElement | null;
 
   let selectorInoreader = '.article_content'
-  let selectorFeedly = '.entryBody'
+  let selectorMedium = 'article'
+  let mediumArticle = container != null && document.querySelector(selectorMedium) as HTMLElement || null
+
 
   chrome.storage.local.get({
     selectorInoreader: '.article_content',
-    selectorFeedly: '.entryBody'
+    selectorMedium: 'article'
   }, function (items) {
     selectorInoreader = items.selectorInoreader
-    selectorFeedly = items.selectorFeedly
+    selectorMedium = items.selectorMedium
   });
 
-  if (isInoReader || isFeedly) {
-    const articleClass = isFeedly ? selectorFeedly : selectorInoreader
+  if (isInoReader || mediumArticle != null) {
+    const articleClass = mediumArticle != null ? selectorMedium : selectorInoreader;
     const content = document.querySelector(articleClass)
     if (content != null) {
       article = content as HTMLElement
@@ -180,10 +182,13 @@ const HEADING_TAG_WEIGHTS = {
   H4: 10,
   H5: 10,
   H6: 10,
-  STRONG: 5,
+  // STRONG: 5,
 }
 export const extractHeadings = (articleDom: HTMLElement): Heading[] => {
   const isVisible = (elem: HTMLElement) => elem.offsetHeight !== 0
+  const container = document.getElementById("root") as HTMLElement | null;
+  let mediumArticle = container != null && document.querySelector('article') as HTMLElement || null
+
   type HeadingGroup = {
     tag: string
     elems: HTMLElement[]
@@ -210,6 +215,18 @@ export const extractHeadings = (articleDom: HTMLElement): Heading[] => {
               (elem) => elem.getBoundingClientRect().left === commonLeft,
             )
           }
+        }
+        // filter out headings in flex container or with previous sibling div that is flex
+        if (mediumArticle && tag.toLowerCase() === 'h2') {
+          elems = elems.filter(
+            (elem) => {
+              const parent = elem.parentElement;
+              const isParentFlex = parent && parent.tagName.toLowerCase() === 'div' && getComputedStyle(parent).display === 'flex';
+              const prevSibling = parent && parent.previousElementSibling;
+              const isPrevSiblingFlex = prevSibling && prevSibling.tagName.toLowerCase() === 'div' && getComputedStyle(prevSibling).display === 'flex';
+              return !isParentFlex && !isPrevSiblingFlex;
+            }
+          )
         }
         return {
           tag,

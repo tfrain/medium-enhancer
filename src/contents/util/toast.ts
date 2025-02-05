@@ -17,14 +17,14 @@ function setClass(
 
 let timers: (number | undefined)[] = []
 export function showToast(msg: string) {
-  addCSS(toastCSS, 'smarttoc-toast__css')
+  addCSS(toastCSS, 'mediumtoc-toast__css')
   const set = (classNames: string, delay?: number) => {
     return setClass(toast!, classNames, delay)
   }
-  let toast = document.getElementById('smarttoc-toast') as HTMLElement | null
+  let toast = document.getElementById('mediumtoc-toast') as HTMLElement | null
   if (!toast) {
     toast = document.createElement('DIV')
-    toast.id = 'smarttoc-toast'
+    toast.id = 'mediumtoc-toast'
     document.body.appendChild(toast)
   }
   toast.textContent = msg

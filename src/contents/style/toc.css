@@ -1,14 +1,14 @@
-#smarttoc {
+#mediumtoc {
   all: initial;
 }
 
-#smarttoc *,
-#smarttoc *::before,
-#smarttoc *::after {
+#mediumtoc *,
+#mediumtoc *::before,
+#mediumtoc *::after {
   all: unset;
 }
 
-#smarttoc {
+#mediumtoc {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -16,7 +16,7 @@
   /* left: 0px; */
   /* top: 0px; */
   min-width: 14em;
-  width: 260px;
+  width: 280px;
   max-height: 80vh;
   z-index: 10000;
   box-sizing: border-box;
@@ -36,11 +36,11 @@
   box-shadow: rgba(17, 17, 26, 0.1) 0px 4px 16px, rgba(17, 17, 26, 0.1) 0px 8px 24px, rgba(17, 17, 26, 0.1) 0px 16px 56px;
 }
 
-#smarttoc.hidden {
+#mediumtoc.hidden {
   display: none;
 }
 
-#smarttoc .handle {
+#mediumtoc .handle {
   -webkit-user-select: none;
   user-select: none;
 
@@ -57,23 +57,23 @@
   transition: opacity 0.3s;
 }
 
-#smarttoc:hover .handle {
+#mediumtoc:hover .handle {
   max-width: 100vw;
   opacity: 1;
 }
 
-#smarttoc .handle:hover {
+#mediumtoc .handle:hover {
   cursor: grab;
 }
-#smarttoc .handle:active {
+#mediumtoc .handle:active {
   cursor: grabbing;
 }
 
-#smarttoc .handle:active {
+#mediumtoc .handle:active {
   background: #f9f9f9;
 }
 
-#smarttoc > ul {
+#mediumtoc > ul {
   flex-grow: 1;
   padding: 0 1.3em 1.3em 1em;
   overflow-y: auto;
@@ -81,13 +81,13 @@
 
 /* all headings  */
 
-#smarttoc ul,
-#smarttoc li {
+#mediumtoc ul,
+#mediumtoc li {
   list-style: none;
   display: block;
 }
 
-#smarttoc a {
+#mediumtoc a {
   text-decoration: none;
   color: gray;
   display: block;
@@ -101,62 +101,62 @@
   cursor: pointer;
 }
 
-#smarttoc a:hover,
-#smarttoc a:active {
+#mediumtoc a:hover,
+#mediumtoc a:active {
   border-left-color: rgba(86, 61, 124, 0.5);
   color: #563d7c;
 }
 
-#smarttoc li.active > a {
+#mediumtoc li.active > a {
   border-left-color: #563d7c;
   color: #563d7c;
 }
 
 /* heading level: 1 */
 
-#smarttoc ul {
+#mediumtoc ul {
   line-height: 2;
 }
 
-#smarttoc ul a {
+#mediumtoc ul a {
   font-size: 1em;
   padding-left: 1.3em;
 }
 
-#smarttoc ul a:hover,
-#smarttoc ul a:active,
-#smarttoc ul li.active > a {
+#mediumtoc ul a:hover,
+#mediumtoc ul a:active,
+#mediumtoc ul li.active > a {
   border-left-width: 3px;
   border-left-style: solid;
   padding-left: calc(1.3em - 3px);
 }
 
-#smarttoc ul li.active > a {
+#mediumtoc ul li.active > a {
   font-weight: 700;
 }
 
 /* heading level: 2 (hidden only when there are too many headings)  */
 
-#smarttoc ul ul {
+#mediumtoc ul ul {
   line-height: 1.8;
 }
 
-#smarttoc.lengthy ul ul {
+#mediumtoc.lengthy ul ul {
   display: none;
 }
 
-#smarttoc.lengthy ul li.active > ul {
+#mediumtoc.lengthy ul li.active > ul {
   display: block;
 }
 
-#smarttoc ul ul a {
+#mediumtoc ul ul a {
   font-size: 1em;
   padding-left: 2.7em;
 }
 
-#smarttoc ul ul a:hover,
-#smarttoc ul ul a:active,
-#smarttoc ul ul li.active > a {
+#mediumtoc ul ul a:hover,
+#mediumtoc ul ul a:active,
+#mediumtoc ul ul li.active > a {
   border-left-width: 2px;
   border-left-style: solid;
   padding-left: calc(2.7em - 2px);
@@ -165,23 +165,23 @@
 
 /* heading level: 3 (hidden unless parent is active) */
 
-#smarttoc ul ul ul {
+#mediumtoc ul ul ul {
   line-height: 1.7;
   display: none;
 }
 
-#smarttoc ul ul li.active > ul {
+#mediumtoc ul ul li.active > ul {
   display: block;
 }
 
-#smarttoc ul ul ul a {
+#mediumtoc ul ul ul a {
   font-size: 1em;
   padding-left: 4em;
 }
 
-#smarttoc ul ul ul a:hover,
-#smarttoc ul ul ul a:active,
-#smarttoc ul ul ul li.active > a {
+#mediumtoc ul ul ul a:hover,
+#mediumtoc ul ul ul a:active,
+#mediumtoc ul ul ul li.active > a {
   border-left-width: 1px;
   border-left-style: solid;
   padding-left: calc(4em - 1px);

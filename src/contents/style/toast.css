@@ -1,12 +1,12 @@
-#smarttoc-toast {
+#mediumtoc-toast {
   all: initial;
 }
 
-#smarttoc-toast * {
+#mediumtoc-toast * {
   all: unset;
 }
 
-#smarttoc-toast {
+#mediumtoc-toast {
   display: none;
   position: fixed;
   right: 0;
@@ -26,25 +26,25 @@
   transition: opacity 200ms ease-out, transform 200ms ease-out;
 }
 
-#smarttoc-toast.enter {
+#mediumtoc-toast.enter {
   display: block;
   opacity: 0.01;
   transform: translate3d(0, -2em, 0);
 }
 
-#smarttoc-toast.enter.enter-active {
+#mediumtoc-toast.enter.enter-active {
   display: block;
   opacity: 1;
   transform: translate3d(0, 0, 0);
 }
 
-#smarttoc-toast.leave {
+#mediumtoc-toast.leave {
   display: block;
   opacity: 1;
   transform: translate3d(0, 0, 0);
 }
 
-#smarttoc-toast.leave.leave-active {
+#mediumtoc-toast.leave.leave-active {
   display: block;
   opacity: 0.01;
   transform: translate3d(0, -2em, 0);
