@@ -1,8 +1,6 @@
 import { isDebugging } from '../util/env'
 import { draw } from '../util/debug'
 
-// 这个函数对于处理滚动事件和计算滚动位置非常有用，特别是在需要动态调整页面布局或实现滚动效果时。
-// 可以获取或设置元素内容从其顶部边缘滚动的像素数
 export const getScrollTop = (elem: HTMLElement): number => {
   if (elem === document.body) {
     return document.documentElement.scrollTop || document.body.scrollTop

@@ -1,9 +1,5 @@
-// 为什么 Service Worker 是 Inactive？
-// Service Worker 在未监听事件时会自动进入 Inactive 状态。确保代码中设置了监听器，如 chrome.runtime.onMessage。
-// 需要先修好 content页面的问题
-
-// 获取当前活动的标签页
-// 参数：cb - 回调函数，接收当前活动标签页作为参数
+// wwtd P1 更新连接，提醒用户去选项页面
+// wwtd P1 更改插件颜色
 const getCurrentTab = (cb) => {
   chrome.tabs.query({ active: true, currentWindow: true }, ([activeTab]) => {
     cb(activeTab)
@@ -35,7 +31,6 @@ const execOnCurrentTab = (command) => {
 }
 
 // 监听扩展图标 onClicked 事件
-// chrome.action.onClicked.addListener(() => execOnCurrentTab('toggle'))
 // 监听快捷键命令
 chrome.commands.onCommand.addListener((command) => execOnCurrentTab(command))
 
@@ -52,7 +47,6 @@ chrome.runtime.onInstalled.addListener(async () => {
   // await chrome.tabs.create({ url });
 });
 
-// 监听上下文菜单点击事件
 chrome.contextMenus.onClicked.addListener(function (item, tab) {
   if (item.menuItemId === 'position_menu') {
     if (chrome.storage) {
@@ -62,7 +56,6 @@ chrome.contextMenus.onClicked.addListener(function (item, tab) {
   }
 });
 
-// 监听来自内容脚本的消息
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
   getCurrentTab(tab => {
     if (tab) {

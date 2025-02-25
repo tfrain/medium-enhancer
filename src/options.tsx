@@ -28,7 +28,6 @@ const Options = () => {
 				setSelectorInoreader(items.selectorInoreader);
 				setTempSelectorInoreader(items.selectorInoreader);
 
-				// 每次设置完毕，展示时都会走到这里逻辑，而下面的设置在第一次打开时不会触发
 				setIsFirstLoad(false);
 				setIsResetLoad(false);
 			}
