@@ -27,3 +27,10 @@ http://www.cnblogs.com/nankezhishi/archive/2012/06/09/getandpost.html
 #cnblogs_post_body
 
 http://www.zenspider.com/Languages/Ruby/QuickRef.html
+
+
+
+// 种子
+https://medium.programmerscareer.com/go-io-package-from-fundamentals-to-advanced-practices-02c585c7237b
+https://medium.com/language-lab/five-proven-approaches-for-raising-bilingual-kids-0b5cc2875888
+https://medium.com/@Alizay_Yousfzai/chinas-laser-fusion-facility-the-sci-fi-dream-turned-reality-3fdd65a9d25b

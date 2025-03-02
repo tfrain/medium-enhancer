@@ -1,13 +1,14 @@
-// wwtd P1 更新连接，提醒用户去选项页面
-// wwtd P1 更改插件颜色
+interface Feed {
+  name: string;
+  url: string;
+}
+
 const getCurrentTab = (cb) => {
   chrome.tabs.query({ active: true, currentWindow: true }, ([activeTab]) => {
     cb(activeTab)
   })
 }
 
-// 在当前活动标签页上执行命令
-// 参数：command - 要执行的命令
 const execOnCurrentTab = (command) => {
   getCurrentTab((tab) => {
     if (tab && tab.url.indexOf("chrome") !== 0) {
@@ -42,7 +43,7 @@ chrome.runtime.onInstalled.addListener(async () => {
     type: 'normal',
     contexts: ["all"],
   });
-  // wwtd P1，end。跳转到选项页面，最后再打开这里
+  // wwtd P1，end
   // let url = chrome.runtime.getURL("options.html");
   // await chrome.tabs.create({ url });
 });
@@ -56,22 +57,143 @@ chrome.contextMenus.onClicked.addListener(function (item, tab) {
   }
 });
 
-chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
-  getCurrentTab(tab => {
-    if (tab) {
-      if (request == 'unload') {
-        // chrome.action.setIcon({
-        //   tabId: tab.id,
-        //   path: "icon_gray.png"
-        // });
+// chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+//   getCurrentTab(tab => {
+//     if (tab) {
+//       if (request == 'unload') {
+//         // chrome.action.setIcon({
+//         //   tabId: tab.id,
+//         //   path: "icon_gray.png"
+//         // });
+//       }
+//       else if (request === 'load') {
+//         // chrome.action.setIcon({
+//         //   tabId: tab.id,
+//         //   path: "icon.png"
+//         // });
+//       }
+//     }
+//   });
+//   sendResponse(true)
+// });
+
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.url) {
+    chrome.scripting.executeScript(
+      {
+        target: { tabId: tabId },
+        func: (currentUrl) => {
+          const urlObj = new URL(currentUrl)
+          const articleId = /-([0-9a-z]{10,})$/.exec(urlObj.pathname)?.[1]
+          if (articleId) {
+            const queryData = `a[href*="${articleId}"]`
+            const links = Array.from(document.querySelectorAll(queryData)).map(link => link.href)
+            return { isMediumPage: true, articleId, links }
+          }
+          return { isMediumPage: false, articleId: null, links: [] }
+        },
+        args: [tab.url]
+      },
+      (results) => {
+        if (results && results[0] && results[0].result) {
+          const { isMediumPage, articleId, links } = results[0].result
+          // setIsMediumPage(isMediumPage)
+          if (isMediumPage) {
+            // setArticleId(articleId)
+            const link1 = links[1].match(/\/\/([^?]+)/)?.[1];
+            const link2 = links[2].match(/\/\/([^?]+)/)?.[1];
+            // 1. medium.com/@Alizay_Yousfzai?
+            // 2. medium.com/feed/@Alizay_Yousfzai?
+
+            // 1. medium.com/feed/@tugce-ercem-isaacs?
+            // 2. medium.com/language-lab?
+
+            // 1. medium.com/feed/language-lab
+            // 2. medium.com/feed/language-lab/tagged/golang
+
+            // 1. wesley-wei.medium.com/?
+            // 2. medium.programmerscareer.com/?
+            // 3. wesley-wei.medium.com/feed
+            // 4. medium.programmerscareer.com/feed
+            // 5. medium.programmerscareer.com/feed/tagged/golang
+            let userFeed = null;
+            let publicationDomain = null;
+            let mediumPublication = null;
+
+            if (link1.includes('@')) {
+              // 仅有非自定义用户
+              const username = link1.split('@')[1];
+              userFeed = `medium.com/feed/@${username}`;
+              if (link1 !== link2) {
+                // 非自定义用户+非自定义出版物
+                mediumPublication = link2.match(/medium\.com\/([^?]+)/)?.[1]
+                if (!mediumPublication) {
+                  // const publicationUrl = new URL(link2)
+                  // publicationDomain = publicationUrl.hostname
+                  // 非自定义用户+自定义出版物
+                  publicationDomain = link2
+                }
+              }
+            } else {
+              // console.log({ link1, link2 })
+              // 自定义用户
+              userFeed = link1 + 'feed'
+              // 自定义用户+非自定义出版物
+              mediumPublication = link2.match(/medium\.com\/([^?]+)/)?.[1]
+              if (!mediumPublication) {
+                // const publicationUrl = new URL(link2)
+                // publicationDomain = publicationUrl.hostname
+                // 自定义用户+自定义出版物
+                publicationDomain = link2
+              }
+            }
+
+            // tags
+            const tags = links.map(url => {
+              const match = url.match(/tag\/([^/?]+)/);
+              return match ? match[1] : null;
+            }).filter(tag => tag !== null);
+
+            const feeds = generateFeeds(userFeed, mediumPublication, publicationDomain, tags)
+            chrome.action.setBadgeText({ text: feeds.length.toString(), tabId: tabId });
+            chrome.action.setBadgeBackgroundColor({ color: '#070707', tabId: tabId });
+            chrome.storage.local.set({ feeds });
+            chrome.storage.local.set({ isMediumPage: true });
+          } else {
+            chrome.action.setBadgeText({ text: '', tabId: tabId });
+            chrome.storage.local.set({ isMediumPage: false });
+          }
+        }
       }
-      else if (request === 'load') {
-        // chrome.action.setIcon({
-        //   tabId: tab.id,
-        //   path: "icon.png"
-        // });
-      }
-    }
-  });
-  sendResponse(true)
+    )
+  }
 });
+
+const generateFeeds = (userFeed: string, mediumPublication: string, publicationDomain: string, tags: string[]) => {
+  const feeds: Feed[] = []
+  if (userFeed) {
+    // Profile page feed
+    feeds.push({ name: 'user feed', url: userFeed })
+  }
+  if (mediumPublication) {
+    // Publication page feed
+    feeds.push({ name: 'publication feed', url: `medium.com/feed/${mediumPublication}` })
+  } else if (publicationDomain) {
+    feeds.push({ name: 'publication feed', url: `${publicationDomain}feed` })
+  }
+  if (tags) {
+    if (mediumPublication) {
+      tags.forEach(tag => {
+        feeds.push({ name: `${tag} feed of publication`, url: `medium.com/feed/${mediumPublication}/tagged/${tag}` })
+      })
+    } else if (publicationDomain) {
+      // https://medium.programmerscareer.com/feed/tagged/technology
+      tags.forEach(tag => {
+        feeds.push({ name: `${tag} feed of publication`, url: `${publicationDomain}feed/tagged/${tag}` })
+      })
+    }
+    // https://medium.com/feed/tag/technology
+  }
+  return feeds
+}

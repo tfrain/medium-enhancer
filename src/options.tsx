@@ -79,21 +79,14 @@ const Options = () => {
 		}
 	};
 
-	// const handleKeyDownMedium = (event) => {
-	// 	if (event.key === 'Enter') {
-	// 		event.preventDefault();
-	// 		setIsModified(true);
-	// 	}
-	// };
-
 	const handleTweetClick = (event) => {
 		event.preventDefault();
-		const text = encodeURIComponent("发现一个超棒的 #chrome extension(Medium Enhancer)，它能智能展示文章目录，支持 #Inoreader 和 #Medium");
+		const text = encodeURIComponent("Found a great #chrome extension(Medium Enhancer), it can intelligently display the article directory, support #Inoreader and #Medium");
 		const via = encodeURIComponent("WesleyWei0316");
 		const related = encodeURIComponent("compzets");
 		const url = encodeURIComponent("https://github.com/tfrain/medium-enhancer");
 		window.open(
-			`https://twitter.com/intent/tweet?text=${text}&via=${via}&related=${related}&url=${url}`,
+			`https://x.com/intent/tweet?text=${text}&via=${via}&related=${related}&url=${url}`,
 			"_blank"
 		);
 	};

@@ -79,9 +79,9 @@ function activeHeadingStream({
     'scroll',
     addDisposer,
   )
-    .map(() => null) // 这里的 map 操作符将每个滚动事件映射为 null，即忽略事件的具体内容，只关心事件的发生。
-    .startsWith(null) // 这里的 startsWith(null) 表示在流开始时先发出一个 null 值。
-    .log('scroll') // 里的 log('scroll') 表示在每次滚动事件发生时记录日志，日志内容为 'scroll'。
+    .map(() => null)
+    .startsWith(null)
+    .log('scroll')
 
   const $activeHeading: Stream<number> = Stream.combine(
     $content,
@@ -92,10 +92,6 @@ function activeHeadingStream({
     .filter(() => $isShown())
     // 这里的 filter 操作符检查 $isShown() 是否为 true，即只有在目录显示时才会继续处理流中的值
     .map(([content, topbarHeight, _]) => {
-      //       这里的 map 操作符接收一个数组 [content, topbarHeight, _]，其中：
-      // content 是 Content 对象。
-      // topbarHeight 是顶部栏的高度。
-      // _ 是滚动事件（这里被忽略）。
       // 解构赋值，从 content 对象中提取 article、scroller 和 headings 属性。
       const { article, scroller, headings } = content
       if (!(headings && headings.length)) {
