@@ -10,24 +10,31 @@ function IndexPopup() {
   const [isMediumPage, setIsMediumPage] = useState(false)
 
   useEffect(() => {
-    chrome.storage.local.get('feeds', (result) => {
-      if (result.feeds) {
-        setFeeds(result.feeds)
+    // 获取当前标签页的 URL
+    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      if (tab?.url?.includes('medium.com') && /-[0-9a-z]{10,}$/.test(tab.url)) {
+        chrome.storage.local.get(['feeds', 'isMediumPage'], (result) => {
+          if (result.feeds) setFeeds(result.feeds);
+          setIsMediumPage(true);  // 直接设置为 true
+        });
+      } else {
+        setIsMediumPage(false);
+        setFeeds([]);
       }
-    })
-    chrome.storage.local.get('isMediumPage', (result) => {
-      if (result.isMediumPage) {
-        setIsMediumPage(result.isMediumPage)
+    });
+
+    const storageListener = (changes) => {
+      if (changes.feeds) {
+        setFeeds(changes.feeds.newValue || []);
       }
-    })
+    };
 
-    // chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    //   if (message.type === 'updateFeeds') {
-    //     setFeeds(message.feeds)
+    chrome.storage.onChanged.addListener(storageListener);
 
-    //   }
-    // })
-  }, [])
+    return () => {
+      chrome.storage.onChanged.removeListener(storageListener);
+    };
+  }, []);
 
   return (
     <div

@@ -50,6 +50,7 @@ if (window === getContentWindow()) {
   }
   let isLoad = false;
   let isNewArticleDetected = true
+  let hasShownNoArticleToast = false  // 添加这行
 
   let toc: Toc | undefined
 
@@ -63,21 +64,31 @@ if (window === getContentWindow()) {
     if (toc) {
       toc.dispose()
     }
-    // wwtd P2, 边界case。 medium 不提示 No article/headings are detected
-    if (isMediumOrInoreader && (isInoReaderCom || (isMediumCom && !isValidUrl(window.location.pathname)))) {
+    if (isMediumOrInoreader && (isInoReaderCom || (isMediumComPrefix && !isValidUrl(window.location.pathname)))) {
       return
     }
 
     if (!(article && headings && headings.length)) {
-      chrome.storage.local.get({
-        isShowTip: true
-      }, function (items) {
-        if (items.isShowTip) {
-          showToast('No article/headings are detected.')
+      // 添加延迟检查
+      setTimeout(() => {
+        const newArticle = extractArticle()
+        const newHeadings = newArticle && extractHeadings(newArticle)
+        if (!(newArticle && newHeadings && newHeadings.length)) {
+          chrome.storage.local.get({
+            isShowTip: true
+          }, function (items) {
+            if (items.isShowTip && !hasShownNoArticleToast) {
+              showToast('No article/headings are detected.')
+              hasShownNoArticleToast = true
+            }
+          });
+        } else {
+          renderToc(newArticle, newHeadings)
         }
-      });
+      }, 500)
       return
     }
+    hasShownNoArticleToast = false  // 重置状态
     isNewArticleDetected = true
 
     toc = createToc({
@@ -191,6 +202,7 @@ if (window === getContentWindow()) {
     let isArticleChanged = (el && (el.id !== articleId || el.className !== articleContentClass)) || !el
     if (isArticleChanged) {
       isNewArticleDetected = false
+      hasShownNoArticleToast = false  // 添加这行，重置提示状态
       if (isDebugging) {
         console.log('refresh')
       }
@@ -209,7 +221,10 @@ if (window === getContentWindow()) {
         childList: true,
         subtree: true
       });
-      // start();
+      // wwtd P2 不优雅的处理
+      if (isMediumCom || isInoReaderCom) {
+        start();
+      }
     }
   }
 
@@ -229,9 +244,10 @@ if (window === getContentWindow()) {
     dm.indexOf('inoreader.com') >= 0 || dm.indexOf('innoreader.com') > 0
   const container = document.getElementById("root") as HTMLElement | null;
   let mediumArticle = container != null && document.querySelector(selectorMedium) as HTMLElement || null
-  let isMediumCom = dm.indexOf('medium.com') >= 0;
+  let isMediumComPrefix = dm.indexOf('medium.com') >= 0;
+  let isMediumCom = dm === 'medium.com'
   let isInoReaderCom = dm === 'inoreader.com' || dm === 'innoreader.com';
-  let isMediumOrInoreader = isInoReader || isMediumCom || mediumArticle !== null;
+  let isMediumOrInoreader = isInoReader || isMediumComPrefix || mediumArticle !== null;
 
   chrome.storage.local.get({
     autoType: '2'

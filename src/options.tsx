@@ -183,7 +183,8 @@ const Options = () => {
 			</div>
 			<br />
 			<br />
-			Source Code: <a href="https://github.com/tfrain/medium-enhancer" target="_blank">https://github.com/tfrain/medium-enhancer</a>
+			{/* <a href="https://github.com/tfrain/medium-enhancer" target="_blank">https://github.com/tfrain/medium-enhancer</a> */}
+			Source Code: It will be public soon.
 			<br />
 			<p>
 				Original &#9829; by <a href="https://github.com/FallenMax/smart-toc" target="_blank">FallenMax</a>

@@ -1,6 +1,6 @@
 {
   "name": "medium-enhancer",
-  "displayName": "medium-enhancer",
+  "displayName": "Medium Enhancer",
   "version": "0.0.1",
   "description": "Enhance your Medium experience with features like TOC (Table of Contents) and RSS support.",
   "author": "Wesley Wei",
@@ -48,7 +48,6 @@
       }
     },
     "permissions": [
-      "activeTab",
       "storage",
       "contextMenus",
       "scripting"
