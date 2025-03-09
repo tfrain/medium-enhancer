@@ -7,9 +7,9 @@ https://github.com/PlasmoHQ/examples/blob/main/with-src/package.json
 
 # 运行
 0. pnpm install 进行测试
-1. pnpm dev 边测试边用
+1. pnpm dev 边测试边用("dev": "rm -rf ./build/chrome-mv3-dev && plasmo dev",)
 2. pnpm build 打包
-3. pnpm package 生成zip包
+3. pnpm build -- --zip 生成zip包
 
 
 - 就是少弄了快捷键，因为和 onCommand 相对应的，另外也少弄了content_security_policy

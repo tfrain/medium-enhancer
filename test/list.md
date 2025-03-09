@@ -1,8 +1,6 @@
 https://itnext.io/when-config-becomes-the-code-the-trap-of-over-abstracting-logic-e6f5c0048321
-去除链接带来的header
-
-https://blog.medium.com/it-happened-on-medium-in-2024-6575a0e85406
-去除加速带来的影响
+https://medium.programmerscareer.com/my-10-obsidian-plugins-as-a-medium-writer-6f440119587f
+去除链接带来的header, 并且要展示出 rss
 
 https://medium.com/@udaykishoreresu/understanding-restful-api-79c7e625f752
 从一个有目录的进入一个无目录的链接，会导致展示上一个文章的内容

@@ -225,7 +225,7 @@ export const extractHeadings = (articleDom: HTMLElement): Heading[] => {
               const grandParent = parent?.parentElement;
               const isParentFlex = parent && parent.tagName.toLowerCase() === 'div' && getComputedStyle(parent).display === 'flex';
               // 文章中链接medium的子标题
-              const isGrandParentFlex = grandParent && grandParent.tagName.toLowerCase() === 'div' && getComputedStyle(grandParent).display === 'flex';
+              const isGrandParentFlex = tag.toLowerCase() === 'h3' && grandParent && grandParent.tagName.toLowerCase() === 'div' && getComputedStyle(grandParent).display === 'flex';
 
               const prevSibling = parent && parent.previousElementSibling;
               const isPrevSiblingFlex = prevSibling && prevSibling.tagName.toLowerCase() === 'div' && getComputedStyle(prevSibling).display === 'flex';

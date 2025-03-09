@@ -12,7 +12,7 @@ function IndexPopup() {
   useEffect(() => {
     // 获取当前标签页的 URL
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-      if (tab?.url?.includes('medium.com') && /-[0-9a-z]{10,}$/.test(tab.url)) {
+      if (/-[0-9a-z]{10,}$/.test(tab.url)) {
         chrome.storage.local.get(['feeds', 'isMediumPage'], (result) => {
           if (result.feeds) setFeeds(result.feeds);
           setIsMediumPage(true);  // 直接设置为 true

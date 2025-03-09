@@ -1,11 +1,11 @@
 {
   "name": "medium-enhancer",
   "displayName": "Medium Enhancer",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Enhance your Medium experience with features like TOC (Table of Contents) and RSS support.",
   "author": "Wesley Wei",
   "scripts": {
-    "dev": "rm -rf ./build/chrome-mv3-dev && plasmo dev",
+    "dev": "plasmo dev",
     "build": "plasmo build",
     "package": "plasmo package"
   },
@@ -27,7 +27,6 @@
   },
   "manifest": {
     "host_permissions": [
-      "http://*/*",
       "https://*/*"
     ],
     "commands": {
@@ -52,9 +51,6 @@
       "contextMenus",
       "scripting"
     ],
-    "content_security_policy": {
-      "extension_pages": "script-src 'self';object-src 'self';script-src-elem 'self' 'unsafe-inline' https://platform.twitter.com https://syndication.twitter.com;"
-    },
     "author": "cwei3790@gmail.com"
   }
 }
