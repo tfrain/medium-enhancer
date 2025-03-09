@@ -5,7 +5,6 @@
 # 例子
 https://github.com/PlasmoHQ/examples/blob/main/with-src/package.json
 
-
 # 运行
 0. pnpm install 进行测试
 1. pnpm dev 边测试边用

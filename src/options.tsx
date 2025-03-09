@@ -81,7 +81,7 @@ const Options = () => {
 
 	const handleTweetClick = (event) => {
 		event.preventDefault();
-		const text = encodeURIComponent("Found a great #chrome extension(Medium Enhancer), it can intelligently display the article directory, support #Inoreader and #Medium");
+		const text = encodeURIComponent("Found a great #chrome extension(Medium Enhancer), it can intelligently display the article toc, support #Inoreader and #Medium");
 		const via = encodeURIComponent("WesleyWei0316");
 		const related = encodeURIComponent("compzets");
 		const url = encodeURIComponent("https://github.com/tfrain/medium-enhancer");
@@ -190,6 +190,8 @@ const Options = () => {
 				Original &#9829; by <a href="https://github.com/FallenMax/smart-toc" target="_blank">FallenMax</a>
 				<br />
 				Modified &#9829; by <a href="https://wesley-wei.medium.com/" target="_blank">WesleyWei</a>
+				<br />
+				Send me feedback  &#9829; via <a href="https://t.me/tfrain_w" target="_blank">My telegram</a>
 			</p>
 			<br />
 			<br />

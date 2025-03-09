@@ -65,9 +65,11 @@ function IndexPopup() {
       )}
       <footer>
         <p>
-          Welcome to follow me:<a href="https://wesley-wei.medium.com/" target="_blank" rel="noopener noreferrer">
+          Welcome to follow my Medium:<a href="https://wesley-wei.medium.com/" target="_blank" rel="noopener noreferrer">
             @WesleyWei
           </a>
+          <br />
+          Send me feedback via: <a href="https://t.me/tfrain_w" target="_blank">My telegram</a>
         </p>
       </footer>
     </div>

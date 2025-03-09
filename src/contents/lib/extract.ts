@@ -216,15 +216,21 @@ export const extractHeadings = (articleDom: HTMLElement): Heading[] => {
             )
           }
         }
-        // filter out headings in flex container or with previous sibling div that is flex
-        if (mediumArticle && tag.toLowerCase() === 'h2') {
+        // for medium. filter out headings in flex container or with previous sibling div that is flex
+        if (mediumArticle && (tag.toLowerCase() === 'h2' || tag.toLowerCase() === 'h3')) {
           elems = elems.filter(
             (elem) => {
+              // 文章中链接medium的标题
               const parent = elem.parentElement;
+              const grandParent = parent?.parentElement;
               const isParentFlex = parent && parent.tagName.toLowerCase() === 'div' && getComputedStyle(parent).display === 'flex';
+              // 文章中链接medium的子标题
+              const isGrandParentFlex = grandParent && grandParent.tagName.toLowerCase() === 'div' && getComputedStyle(grandParent).display === 'flex';
+
               const prevSibling = parent && parent.previousElementSibling;
               const isPrevSiblingFlex = prevSibling && prevSibling.tagName.toLowerCase() === 'div' && getComputedStyle(prevSibling).display === 'flex';
-              return !isParentFlex && !isPrevSiblingFlex;
+
+              return !isParentFlex && !isPrevSiblingFlex && !isGrandParentFlex;
             }
           )
         }
