@@ -1,14 +1,26 @@
+/**
+ * Interface representing a RSS feed with name and URL
+ */
 interface Feed {
-  name: string;
-  url: string;
+  name: string; // Display name of the feed
+  url: string;  // URL of the feed
 }
 
+/**
+ * Gets the current active tab and passes it to the callback function
+ * @param cb - Callback function that receives the active tab
+ */
 const getCurrentTab = (cb) => {
   chrome.tabs.query({ active: true, currentWindow: true }, ([activeTab]) => {
     cb(activeTab)
   })
 }
 
+/**
+ * Executes a command on the current tab
+ * If the tab doesn't respond, attempts to inject the TOC script
+ * @param command - Command to execute ('toggle', 'prev', 'next', etc.)
+ */
 const execOnCurrentTab = (command) => {
   getCurrentTab((tab) => {
     if (tab && tab.url.indexOf("chrome") !== 0) {
@@ -31,8 +43,8 @@ const execOnCurrentTab = (command) => {
   })
 }
 
-// 监听扩展图标 onClicked 事件
-// 监听快捷键命令
+// Listen for extension icon onClicked event
+// Listen for keyboard shortcut commands
 chrome.commands.onCommand.addListener((command) => execOnCurrentTab(command))
 
 chrome.contextMenus.onClicked.addListener(function (item, tab) {
@@ -69,8 +81,12 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 // 添加一个变量来跟踪上一次的 URL
 let lastUrl = '';
 
+/**
+ * Listens for tab updates to detect Medium articles and extract RSS feeds
+ * Only processes when page is fully loaded and URL has changed
+ */
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  // 只在页面完全加载完成，并且 URL 与上次不同时执行
+  // Only execute when page is fully loaded and URL is different from last time
   if (changeInfo.status === 'complete' && tab.url && tab.url !== lastUrl) {
     lastUrl = tab.url;
 
@@ -100,6 +116,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                 // setArticleId(articleId)
                 const link1 = links[1].match(/\/\/([^?]+)/)?.[1];
                 const link2 = links[2].match(/\/\/([^?]+)/)?.[1];
+                // Example URL patterns:
                 // 1. medium.com/@Alizay_Yousfzai?
                 // 2. medium.com/feed/@Alizay_Yousfzai?
 
@@ -119,34 +136,34 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                 let mediumPublication = null;
 
                 if (link1.includes('@')) {
-                  // 仅有非自定义用户
+                  // Only non-custom user
                   const username = link1.split('@')[1];
                   userFeed = `medium.com/feed/@${username}`;
                   if (link1 !== link2) {
-                    // 非自定义用户+非自定义出版物
+                    // Non-custom user + non-custom publication
                     mediumPublication = link2.match(/medium\.com\/([^?]+)/)?.[1]
                     if (!mediumPublication) {
                       // const publicationUrl = new URL(link2)
                       // publicationDomain = publicationUrl.hostname
-                      // 非自定义用户+自定义出版物
+                      // Non-custom user + custom publication
                       publicationDomain = link2
                     }
                   }
                 } else {
                   // console.log({ link1, link2 })
-                  // 自定义用户
+                  // Custom user
                   userFeed = link1 + 'feed'
-                  // 自定义用户+非自定义出版物
+                  // Custom user + non-custom publication
                   mediumPublication = link2.match(/medium\.com\/([^?]+)/)?.[1]
                   if (!mediumPublication) {
                     // const publicationUrl = new URL(link2)
                     // publicationDomain = publicationUrl.hostname
-                    // 自定义用户+自定义出版物
+                    // Custom user + custom publication
                     publicationDomain = link2
                   }
                 }
 
-                // tags
+                // Extract tags from URLs
                 const tags = links.map(url => {
                   const match = url.match(/tag\/([^/?]+)/);
                   return match ? match[1] : null;
@@ -164,7 +181,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             }
           }
         )
-      }, 1000)  // 增加延时确保 DOM 完全加载
+      }, 1000)  // Add delay to ensure DOM is fully loaded
     } else {
       chrome.action.setBadgeText({ text: '', tabId: tabId });
       chrome.storage.local.set({ isMediumPage: false });
@@ -172,6 +189,14 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
+/**
+ * Generates a list of RSS feeds based on user, publication, and tags
+ * @param userFeed - User feed URL
+ * @param mediumPublication - Medium publication name
+ * @param publicationDomain - Custom publication domain
+ * @param tags - Array of tags found in the article
+ * @returns Array of Feed objects with name and URL
+ */
 const generateFeeds = (userFeed: string, mediumPublication: string, publicationDomain: string, tags: string[]) => {
   const feeds: Feed[] = []
   if (userFeed) {

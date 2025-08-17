@@ -1,21 +1,36 @@
 import { useState, useEffect } from "react"
 
+/**
+ * Interface representing a RSS feed with name and URL
+ */
 interface Feed {
-  name: string;
-  url: string;
+  name: string; // Display name of the feed
+  url: string;  // URL of the feed
 }
 
+/**
+ * Main popup component for the extension
+ * Displays available RSS feeds for Medium articles
+ */
 function IndexPopup() {
+  // State to store available feeds for the current page
   const [feeds, setFeeds] = useState<Feed[]>([])
+  // State to track if current page is a Medium article
   const [isMediumPage, setIsMediumPage] = useState(false)
 
+  /**
+   * Effect hook to initialize the popup
+   * - Checks if current tab is a Medium article
+   * - Loads saved feeds from storage if available
+   * - Sets up storage change listener
+   */
   useEffect(() => {
-    // 获取当前标签页的 URL
+    // Get the URL of the current tab
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       if (/-[0-9a-z]{10,}$/.test(tab.url)) {
         chrome.storage.local.get(['feeds', 'isMediumPage'], (result) => {
           if (result.feeds) setFeeds(result.feeds);
-          setIsMediumPage(true);  // 直接设置为 true
+          setIsMediumPage(true);  // Directly set to true
         });
       } else {
         setIsMediumPage(false);
@@ -23,6 +38,7 @@ function IndexPopup() {
       }
     });
 
+    // Listen for changes to the feeds in storage
     const storageListener = (changes) => {
       if (changes.feeds) {
         setFeeds(changes.feeds.newValue || []);
@@ -36,6 +52,12 @@ function IndexPopup() {
     };
   }, []);
 
+  /**
+   * Render the popup UI
+   * - Shows list of available feeds if on a Medium page
+   * - Shows message if not on a Medium page
+   * - Includes footer with author information
+   */
   return (
     <div
       style={{

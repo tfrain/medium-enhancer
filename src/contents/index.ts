@@ -5,6 +5,10 @@ import { isDebugging, offsetKey } from './util/env'
 import { showToast } from './util/toast'
 import type { PlasmoCSConfig } from "plasmo"
 
+/**
+ * Configuration for the Plasmo content script
+ * Specifies when and where the script should run
+ */
 export const config: PlasmoCSConfig = {
   matches: [
     "http://*/*",
@@ -13,6 +17,11 @@ export const config: PlasmoCSConfig = {
   run_at: "document_end",
 }
 
+/**
+ * Sets TOC position preferences based on stored settings
+ * @param preference - The preference object to update
+ * @param callback - Optional callback function to execute after preferences are set
+ */
 function setPreference(preference, callback) {
   if (chrome.storage && chrome.storage.local) {
     const defaultOptions = {
@@ -39,6 +48,12 @@ function setPreference(preference, callback) {
   }
 }
 
+/**
+ * Checks if a URL is a valid Medium article URL
+ * Medium article URLs typically end with a dash followed by a 10+ character ID
+ * @param url - The URL to check
+ * @returns True if the URL matches the Medium article pattern
+ */
 function isValidUrl(url: string): boolean {
   const regex = /-[0-9a-z]{10,}$/;
   return regex.test(url);
@@ -50,16 +65,25 @@ if (window === getContentWindow()) {
   }
   let isLoad = false;
   let isNewArticleDetected = true
-  let hasShownNoArticleToast = false  // 添加这行
+  let hasShownNoArticleToast = false  // Add this line to track toast display status
 
   let toc: Toc | undefined
 
+  /**
+   * Starts the TOC generation process
+   * Extracts the article and headings, then renders the TOC
+   */
   const start = (): void => {
     const article = extractArticle()
     const headings = article && extractHeadings(article)
     renderToc(article, headings)
   }
 
+  /**
+   * Renders the Table of Contents for the article
+   * @param article - The article element
+   * @param headings - Array of heading elements found in the article
+   */
   const renderToc = (article, headings): void => {
     if (toc) {
       toc.dispose()
@@ -69,7 +93,7 @@ if (window === getContentWindow()) {
     }
 
     if (!(article && headings && headings.length)) {
-      // 添加延迟检查
+      // Add delayed check
       setTimeout(() => {
         const newArticle = extractArticle()
         const newHeadings = newArticle && extractHeadings(newArticle)
@@ -80,15 +104,15 @@ if (window === getContentWindow()) {
             if (items.isShowTip && !hasShownNoArticleToast) {
               showToast('No article/headings are detected.')
               hasShownNoArticleToast = true
-            }
-          });
-        } else {
-          renderToc(newArticle, newHeadings)
         }
-      }, 500)
-      return
+      });
+    } else {
+      renderToc(newArticle, newHeadings)
     }
-    hasShownNoArticleToast = false  // 重置状态
+  }, 500)
+  return
+}
+hasShownNoArticleToast = false  // Reset status
     isNewArticleDetected = true
 
     toc = createToc({
@@ -195,20 +219,20 @@ if (window === getContentWindow()) {
     selectorMedium = items.selectorMedium
   });
 
-  // 每次dom变化时（meidum切换页面， innoreader切换子页面），都会重新提取文章
+  // Extract article each time DOM changes (Medium page switch, Inoreader subpage switch)
   function trackArticle() {
     const articleClass = mediumArticle != null ? selectorMedium : selectorInoreader;
     const el: HTMLElement = document.querySelector(articleClass) as HTMLElement;
     let isArticleChanged = (el && (el.id !== articleId || el.className !== articleContentClass)) || !el
     if (isArticleChanged) {
       isNewArticleDetected = false
-      hasShownNoArticleToast = false  // 添加这行，重置提示状态
+    hasShownNoArticleToast = false  // Add this line to reset toast status
       if (isDebugging) {
         console.log('refresh')
       }
       articleId = el ? el.id : ''
       articleContentClass = el ? el.className : ''
-      // 没有start 会导致目录不及时取消，有start 会导致no headings 展示出来，因为没加载完毕
+      // Without start(), TOC won't be canceled promptly; with start(), "no headings" may show because content isn't fully loaded
       const observer = new MutationObserver((mutations, obs) => {
         const articleLoaded = document.querySelector(articleClass);
         if (articleLoaded) {
