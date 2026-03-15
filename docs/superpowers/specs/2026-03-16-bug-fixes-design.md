@@ -1,0 +1,160 @@
+# Bug Fixes Design — Medium Enhancer
+
+**Date:** 2026-03-16
+**Scope:** Fix 6 confirmed bugs across `css.ts`, `background.ts`, and `contents/index.ts` / `stream.ts`
+**Strategy:** Surgical fixes (方案 A) for bugs 1, 3, 4, 5, 6；局部重写 (方案 C) for bug 2
+
+---
+
+## Bug 1 — `css.ts`: `removeCSS` crashes when element already exists
+
+**File:** `src/contents/util/dom/css.ts:25-37`
+**Severity:** Critical — any caller of `addCSS` that calls the returned cleaner will throw TypeError
+
+**Root cause:** `style` is declared with `let` but only assigned inside the `if (!document.getElementById(id))` branch. If the element already exists, `style` remains `undefined`, and the returned `removeCSS` closure calls `style.remove()` → crash.
+
+**Fix:** Always resolve the element (find existing or create new) before building the closure.
+
+```typescript
+export const addCSS = function(css: string, id: string): () => void {
+  let style = document.getElementById(id) as HTMLStyleElement | null
+  if (!style) {
+    style = document.createElement('style')
+    style.type = 'text/css'
+    style.id = id
+    style.textContent = css
+    document.head.appendChild(style)
+  }
+  return () => style!.remove()
+}
+```
+
+---
+
+## Bug 2 — `background.ts`: RSS parsing crashes on index out of bounds
+
+**File:** `src/background.ts:117-118`
+**Severity:** Critical — `links[1]` and `links[2]` accessed without bounds check; crashes if article has fewer than 3 matching links, making RSS feature completely non-functional on those pages.
+
+**Root cause:** Logic assumes a fixed ordering and count of links matching the article ID query, which is not guaranteed.
+
+**Fix (方案 C — semantic search):** Instead of positional access, search the links array semantically:
+- Find a link containing `/feed/@` or ending with `/feed` → user feed
+- Find a link containing `/feed/` (non-user) → publication feed
+- Extract tags via `/tag/([^/?]+)` from all links
+
+This is robust regardless of link count or order. Add optional chaining / null checks at every access point.
+
+```typescript
+const userFeedLink = links.find(l => l.includes('/feed/@') || /\/feed\/?$/.test(l))
+const pubFeedLink = links.find(l => l.includes('/feed/') && !l.includes('/feed/@'))
+```
+
+---
+
+## Bug 3 — `background.ts`: `lastUrl` shared across tabs
+
+**File:** `src/background.ts:82-91`
+**Severity:** Medium — navigating to the same URL in a second tab skips RSS detection; badge stays stale
+
+**Root cause:** `let lastUrl = ''` is a module-level singleton shared by all tab update events.
+
+**Fix:** Replace with a `Map<tabId, url>`, cleaned up on tab close:
+
+```typescript
+const lastUrlByTab = new Map<number, string>()
+chrome.tabs.onRemoved.addListener((tabId) => lastUrlByTab.delete(tabId))
+
+// inside onUpdated:
+if (changeInfo.status === 'complete' && tab.url && tab.url !== lastUrlByTab.get(tabId)) {
+  lastUrlByTab.set(tabId, tab.url)
+  ...
+}
+```
+
+---
+
+## Bug 4 — `index.ts`: Inner MutationObserver shadows outer, leaks on unload
+
+**File:** `src/contents/index.ts:236-247`
+**Severity:** Medium — each `trackArticle()` call creates a `const observer` that shadows the outer `let observer`. Calling `unload()` disconnects the outer observer but not these inner ones. They self-disconnect when the article loads, but if `unload()` is called first they persist indefinitely.
+
+**Fix:** Rename the inner observer to avoid shadowing, and track it so `unload()` can clean it up:
+
+```typescript
+let innerObserver: MutationObserver | null = null
+
+function trackArticle() {
+  ...
+  if (innerObserver) innerObserver.disconnect()
+  innerObserver = new MutationObserver((mutations, obs) => {
+    if (document.querySelector(articleClass)) {
+      start()
+      obs.disconnect()
+      innerObserver = null
+    }
+  })
+  innerObserver.observe(document, { childList: true, subtree: true })
+}
+
+function unload() {
+  ...
+  if (innerObserver) { innerObserver.disconnect(); innerObserver = null }
+}
+```
+
+---
+
+## Bug 5 — `index.ts`: `renderToc` retry timer race condition
+
+**File:** `src/contents/index.ts:87-130`
+**Severity:** Medium — if `renderToc` is called again within 500ms of a previous call, the pending retry from the first call still fires, potentially creating a second TOC instance.
+
+**Fix:** Track the retry timer and cancel it on each new `renderToc` call:
+
+```typescript
+let retryTimer: ReturnType<typeof setTimeout> | null = null
+
+const renderToc = (article, headings): void => {
+  if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
+  if (toc) toc.dispose()
+  ...
+  retryTimer = setTimeout(() => {
+    retryTimer = null
+    ...
+  }, 500)
+}
+```
+
+---
+
+## Bug 6 — `stream.ts`: Derived streams never unsubscribe (memory leak)
+
+**File:** `src/contents/util/stream.ts`
+**Severity:** Low-Medium — `.map()`, `.filter()`, `.unique()`, `.merge()` subscribe internally but never unsubscribe. On long-running pages, listener arrays grow indefinitely.
+
+**Fix scope:** Full lifecycle management would require major architectural changes. Pragmatic fix: extend `addDisposer` usage in `createToc` to also unsubscribe the main derived streams when `dispose()` is called.
+
+In `toc.ts`, the key streams returned by `contentStream`, `activeHeadingStream`, and `topbarStream` should have their internal subscriptions cleaned up via the existing `disposers` mechanism. Specifically, `Stream.fromInterval` and `Stream.fromEvent` already support the `addDisposer` callback — ensure all such factory calls pass `addDisposer`.
+
+Audit `toc.ts` to confirm all `Stream.fromInterval` and `Stream.fromEvent` calls pass `addDisposer`, and add it where missing.
+
+---
+
+## Out of Scope
+
+- Full reactive stream lifecycle management (would require rewriting stream.ts architecture)
+- `toast.ts` — the apparent TDZ issue is not a real bug (closure captures variable binding, `toast` is always assigned before first `set()` call)
+- `handle.ts` drag listeners — self-clean via `mouseup`, not a real leak in normal usage
+
+---
+
+## Testing
+
+Since there is no automated test framework, verification is manual:
+1. **Bug 1:** Call `addCSS` twice with same ID; returned cleaner from second call must not throw
+2. **Bug 2:** Open a Medium article with few author links; RSS badge must appear correctly
+3. **Bug 3:** Open same Medium URL in two tabs; both must show RSS badge
+4. **Bug 4:** Trigger `unload()` during article load; check DevTools Memory for observer leaks
+5. **Bug 5:** Navigate rapidly between articles; only one TOC should appear
+6. **Bug 6:** Open a long article, scroll for several minutes; check DevTools Memory for listener growth
