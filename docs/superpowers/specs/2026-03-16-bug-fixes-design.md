@@ -13,10 +13,11 @@
 
 **Root cause:** `style` is declared with `let` but only assigned inside the `if (!document.getElementById(id))` branch. If the element already exists, `style` remains `undefined`, and the returned `removeCSS` closure calls `style.remove()` → crash.
 
-**Fix:** Always resolve the element (find existing or create new) before building the closure.
+**Fix:** On the first line, resolve the existing element into `style`. If none exists, create and append it. The closure always closes over a valid `HTMLStyleElement`.
 
 ```typescript
 export const addCSS = function(css: string, id: string): () => void {
+  // Assign on first line — style is guaranteed non-null before closure is built
   let style = document.getElementById(id) as HTMLStyleElement | null
   if (!style) {
     style = document.createElement('style')
@@ -25,6 +26,7 @@ export const addCSS = function(css: string, id: string): () => void {
     style.textContent = css
     document.head.appendChild(style)
   }
+  // style is always assigned here; non-null assertion is safe
   return () => style!.remove()
 }
 ```
@@ -43,12 +45,18 @@ export const addCSS = function(css: string, id: string): () => void {
 - Find a link containing `/feed/` (non-user) → publication feed
 - Extract tags via `/tag/([^/?]+)` from all links
 
-This is robust regardless of link count or order. Add optional chaining / null checks at every access point.
+This is robust regardless of link count or order. All `.match()` calls must use optional chaining (`?.`) to guard against `undefined` entries:
 
 ```typescript
+// Safe: .find() returns undefined if not found; optional chaining on all .match() calls
 const userFeedLink = links.find(l => l.includes('/feed/@') || /\/feed\/?$/.test(l))
-const pubFeedLink = links.find(l => l.includes('/feed/') && !l.includes('/feed/@'))
+const pubFeedLink  = links.find(l => l.includes('/feed/') && !l.includes('/feed/@'))
+
+const userPath = userFeedLink?.match(/\/\/([^?]+)/)?.[1]  // never crashes
+const pubPath  = pubFeedLink?.match(/\/\/([^?]+)/)?.[1]
 ```
+
+Note: the existing code at lines 117-118 does `links[1].match(...)` — a direct property access on a potentially-undefined element with no optional chaining, which is the root crash.
 
 ---
 
@@ -135,9 +143,16 @@ const renderToc = (article, headings): void => {
 
 **Fix scope:** Full lifecycle management would require major architectural changes. Pragmatic fix: extend `addDisposer` usage in `createToc` to also unsubscribe the main derived streams when `dispose()` is called.
 
-In `toc.ts`, the key streams returned by `contentStream`, `activeHeadingStream`, and `topbarStream` should have their internal subscriptions cleaned up via the existing `disposers` mechanism. Specifically, `Stream.fromInterval` and `Stream.fromEvent` already support the `addDisposer` callback — ensure all such factory calls pass `addDisposer`.
+In `toc.ts`, the key streams returned by `contentStream`, `activeHeadingStream`, and `topbarStream` should have their internal subscriptions cleaned up via the existing `disposers` mechanism.
 
-Audit `toc.ts` to confirm all `Stream.fromInterval` and `Stream.fromEvent` calls pass `addDisposer`, and add it where missing.
+**Audit result — all factory calls already pass `addDisposer`:**
+| Location | Call | Passes `addDisposer`? |
+|----------|------|-----------------------|
+| `activeHeadingStream` (line 77) | `Stream.fromEvent(scroller/window, 'scroll', addDisposer)` | ✅ Yes |
+| `contentStream` (line 127) | `Stream.fromEvent(window, 'resize', addDisposer)` | ✅ Yes |
+| `createToc` (line 242) | `Stream.fromInterval(60000, addDisposer)` | ✅ Yes |
+
+**Conclusion:** The factory-level cleanup is already complete. No code changes needed for the factory calls. The remaining structural leak (derived streams from `.map()`, `.filter()`, `.unique()`) is architectural and out of scope for this fix cycle.
 
 ---
 
