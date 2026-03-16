@@ -115,11 +115,20 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
               if (isMediumPage) {
                 // setArticleId(articleId)
                 // Semantic search — safe regardless of link count or order
-                const userFeedLink = links.find(
-                  (l) => l.includes('/feed/@') || /\/feed\/?(?:\?.*)?$/.test(l)
-                )
+                // Standard user: contains /feed/@ (medium.com/@user)
+                const standardUserFeedLink = links.find((l) => l.includes('/feed/@'))
+
+                // Custom subdomain user: *.medium.com/feed (e.g. wesley-wei.medium.com/feed)
+                const customUserFeedLink = links.find((l) => /\/\/[^/.]+\.medium\.com\/feed(?:\/|\?|$)/.test(l))
+
+                const userFeedLink = standardUserFeedLink ?? customUserFeedLink ?? null
+
+                // Publication: /feed/ with a slug (no @), or custom non-medium.com domain /feed
                 const pubFeedLink = links.find(
-                  (l) => l.includes('/feed/') && !l.includes('/feed/@')
+                  (l) =>
+                    l !== userFeedLink &&
+                    ((l.includes('/feed/') && !l.includes('/feed/@')) ||
+                      /\/\/medium\.[^.]+\.[^/]+\/feed(?:\/|\?|$)/.test(l))
                 )
 
                 // Optional chaining throughout — never crashes on undefined
