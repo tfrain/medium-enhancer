@@ -68,6 +68,7 @@ if (window === getContentWindow()) {
   let hasShownNoArticleToast = false  // Add this line to track toast display status
 
   let toc: Toc | undefined
+  let retryTimer: ReturnType<typeof setTimeout> | null = null
 
   /**
    * Starts the TOC generation process
@@ -85,6 +86,10 @@ if (window === getContentWindow()) {
    * @param headings - Array of heading elements found in the article
    */
   const renderToc = (article, headings): void => {
+    if (retryTimer) {
+      clearTimeout(retryTimer)
+      retryTimer = null
+    }
     if (toc) {
       toc.dispose()
     }
@@ -94,7 +99,8 @@ if (window === getContentWindow()) {
 
     if (!(article && headings && headings.length)) {
       // Add delayed check
-      setTimeout(() => {
+      retryTimer = setTimeout(() => {
+        retryTimer = null
         const newArticle = extractArticle()
         const newHeadings = newArticle && extractHeadings(newArticle)
         if (!(newArticle && newHeadings && newHeadings.length)) {
