@@ -45,18 +45,24 @@ export const addCSS = function(css: string, id: string): () => void {
 - Find a link containing `/feed/` (non-user) → publication feed
 - Extract tags via `/tag/([^/?]+)` from all links
 
-This is robust regardless of link count or order. All `.match()` calls must use optional chaining (`?.`) to guard against `undefined` entries:
+This is robust regardless of link count or order. All `.match()` calls must use optional chaining (`?.`) to guard against `undefined` entries.
+
+The fix **replaces** both the positional access (lines 117-118) and the downstream extraction logic (lines 134-164) with the semantic approach:
 
 ```typescript
-// Safe: .find() returns undefined if not found; optional chaining on all .match() calls
+// Replace lines 117-164 with:
 const userFeedLink = links.find(l => l.includes('/feed/@') || /\/feed\/?$/.test(l))
 const pubFeedLink  = links.find(l => l.includes('/feed/') && !l.includes('/feed/@'))
 
-const userPath = userFeedLink?.match(/\/\/([^?]+)/)?.[1]  // never crashes
+const userPath = userFeedLink?.match(/\/\/([^?]+)/)?.[1]   // never crashes
 const pubPath  = pubFeedLink?.match(/\/\/([^?]+)/)?.[1]
+
+const userFeed = userPath ?? null
+const mediumPublication = pubPath?.match(/medium\.com\/([^?/]+)/)?.[1] ?? null
+const publicationDomain = (!mediumPublication && pubPath) ? pubPath : null
 ```
 
-Note: the existing code at lines 117-118 does `links[1].match(...)` — a direct property access on a potentially-undefined element with no optional chaining, which is the root crash.
+Note: the existing downstream logic at lines 134-164 is preserved in structure but operated on the safely-extracted `userFeed`, `mediumPublication`, and `publicationDomain` variables — removing all unsafe positional access.
 
 ---
 
@@ -118,18 +124,19 @@ function unload() {
 **File:** `src/contents/index.ts:87-130`
 **Severity:** Medium — if `renderToc` is called again within 500ms of a previous call, the pending retry from the first call still fires, potentially creating a second TOC instance.
 
-**Fix:** Track the retry timer and cancel it on each new `renderToc` call:
+**Fix:** Declare `retryTimer` at module scope (alongside `toc`, `observer`, `isLoad` etc.) so it persists across calls. Cancel it at the start of each new `renderToc`:
 
 ```typescript
+// module scope — next to other state variables
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 
 const renderToc = (article, headings): void => {
-  if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
+  if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }  // cancel stale retry
   if (toc) toc.dispose()
   ...
   retryTimer = setTimeout(() => {
     retryTimer = null
-    ...
+    // retry logic
   }, 500)
 }
 ```
@@ -152,7 +159,11 @@ In `toc.ts`, the key streams returned by `contentStream`, `activeHeadingStream`,
 | `contentStream` (line 127) | `Stream.fromEvent(window, 'resize', addDisposer)` | ✅ Yes |
 | `createToc` (line 242) | `Stream.fromInterval(60000, addDisposer)` | ✅ Yes |
 
-**Conclusion:** The factory-level cleanup is already complete. No code changes needed for the factory calls. The remaining structural leak (derived streams from `.map()`, `.filter()`, `.unique()`) is architectural and out of scope for this fix cycle.
+**Conclusion:** Factory-level event/interval cleanup is already wired correctly via `addDisposer` — no changes needed there.
+
+However, derived streams chained from those factories (e.g., `.map()`, `.throttle()`, `.unique()` calls on lines 82, 128, 214, etc.) still accumulate subscriptions because the `subscribe()` calls inside those operators never return or store their unsubscribe handles. This is a structural limitation of the current stream architecture.
+
+**Scope decision:** Full fix requires refactoring `StreamClass` to propagate disposal through the chain — out of scope for this cycle. The fix for this cycle is limited to confirming factory streams are disposed (already done) and documenting the remaining leak for a future stream-lifecycle refactor.
 
 ---
 
