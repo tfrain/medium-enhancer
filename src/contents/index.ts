@@ -317,5 +317,9 @@ hasShownNoArticleToast = false  // Reset status
       innerObserver.disconnect()
       innerObserver = null
     }
+    if (retryTimer) {
+      clearTimeout(retryTimer)
+      retryTimer = null
+    }
   }
 }
