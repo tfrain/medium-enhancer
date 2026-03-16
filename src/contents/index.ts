@@ -155,6 +155,7 @@ hasShownNoArticleToast = false  // Reset status
   )
 
   let observer: any = null;
+  let innerObserver: MutationObserver | null = null
   let timeoutTrack: any = null;
 
   function domListener() {
@@ -233,18 +234,19 @@ hasShownNoArticleToast = false  // Reset status
       articleId = el ? el.id : ''
       articleContentClass = el ? el.className : ''
       // Without start(), TOC won't be canceled promptly; with start(), "no headings" may show because content isn't fully loaded
-      const observer = new MutationObserver((mutations, obs) => {
-        const articleLoaded = document.querySelector(articleClass);
+      if (innerObserver) {
+        innerObserver.disconnect()
+        innerObserver = null
+      }
+      innerObserver = new MutationObserver((mutations, obs) => {
+        const articleLoaded = document.querySelector(articleClass)
         if (articleLoaded) {
-          start();
-          obs.disconnect();
+          start()
+          obs.disconnect()
+          innerObserver = null
         }
-      });
-
-      observer.observe(document, {
-        childList: true,
-        subtree: true
-      });
+      })
+      innerObserver.observe(document, { childList: true, subtree: true })
       // wwtd P2 不优雅的处理
       if (isMediumCom || isInoReaderCom) {
         start();
@@ -304,6 +306,10 @@ hasShownNoArticleToast = false  // Reset status
     if (observer !== null) {
       observer.disconnect()
       observer = null
+    }
+    if (innerObserver) {
+      innerObserver.disconnect()
+      innerObserver = null
     }
   }
 }
