@@ -141,7 +141,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                   : null
 
                 const mediumPublication =
-                  pubPath?.match(/medium\.com\/([^?/]+)/)?.[1] ?? null
+                  pubPath?.match(/medium\.com\/feed\/([^/?]+)/)?.[1] ?? null
                 const publicationDomain =
                   !mediumPublication && pubPath ? pubPath : null
 
