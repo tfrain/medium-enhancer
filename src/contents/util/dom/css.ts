@@ -23,16 +23,13 @@ export function applyStyle(elem: HTMLElement, style = {}, reset = false): void {
 }
 
 export const addCSS = function(css: string, id: string): () => void {
-  let style: HTMLStyleElement
-  if (!document.getElementById(id)) {
+  let style = document.getElementById(id) as HTMLStyleElement | null
+  if (!style) {
     style = document.createElement('style')
     style.type = 'text/css'
     style.id = id
     style.textContent = css
     document.head.appendChild(style)
   }
-  const removeCSS = () => {
-    style.remove()
-  }
-  return removeCSS
+  return () => style!.remove()
 }
