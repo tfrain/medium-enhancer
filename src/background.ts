@@ -78,8 +78,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 
-// 添加一个变量来跟踪上一次的 URL
-let lastUrl = '';
+// Track the last URL per tab to prevent duplicate processing
+const lastUrlByTab = new Map<number, string>()
 
 /**
  * Listens for tab updates to detect Medium articles and extract RSS feeds
@@ -87,8 +87,8 @@ let lastUrl = '';
  */
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   // Only execute when page is fully loaded and URL is different from last time
-  if (changeInfo.status === 'complete' && tab.url && tab.url !== lastUrl) {
-    lastUrl = tab.url;
+  if (changeInfo.status === 'complete' && tab.url && tab.url !== lastUrlByTab.get(tabId)) {
+    lastUrlByTab.set(tabId, tab.url)
 
     // 检查是否是 Medium 文章页面
     if (/-[0-9a-z]{10,}$/.test(tab.url)) {
@@ -170,6 +170,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     }
   }
 });
+
+// Clean up per-tab state when a tab closes
+chrome.tabs.onRemoved.addListener((tabId) => {
+  lastUrlByTab.delete(tabId)
+})
 
 /**
  * Generates a list of RSS feeds based on user, publication, and tags
