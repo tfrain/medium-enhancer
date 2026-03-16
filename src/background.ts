@@ -114,54 +114,27 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
               // setIsMediumPage(isMediumPage)
               if (isMediumPage) {
                 // setArticleId(articleId)
-                const link1 = links[1].match(/\/\/([^?]+)/)?.[1];
-                const link2 = links[2].match(/\/\/([^?]+)/)?.[1];
-                // Example URL patterns:
-                // 1. medium.com/@Alizay_Yousfzai?
-                // 2. medium.com/feed/@Alizay_Yousfzai?
+                // Semantic search — safe regardless of link count or order
+                const userFeedLink = links.find(
+                  (l) => l.includes('/feed/@') || /\/feed\/?(?:\?.*)?$/.test(l)
+                )
+                const pubFeedLink = links.find(
+                  (l) => l.includes('/feed/') && !l.includes('/feed/@')
+                )
 
-                // 1. medium.com/feed/@tugce-ercem-isaacs?
-                // 2. medium.com/language-lab?
+                // Optional chaining throughout — never crashes on undefined
+                const userPath = userFeedLink?.match(/\/\/([^?]+)/)?.[1] ?? null
+                const pubPath  = pubFeedLink?.match(/\/\/([^?]+)/)?.[1] ?? null
 
-                // 1. medium.com/feed/language-lab
-                // 2. medium.com/feed/language-lab/tagged/golang
+                // Normalise: ensure userFeed ends with /feed
+                const userFeed = userPath
+                  ? userPath.includes('/feed') ? userPath : userPath.replace(/\/?$/, '/feed')
+                  : null
 
-                // 1. wesley-wei.medium.com/?
-                // 2. medium.programmerscareer.com/?
-                // 3. wesley-wei.medium.com/feed
-                // 4. medium.programmerscareer.com/feed
-                // 5. medium.programmerscareer.com/feed/tagged/golang
-                let userFeed = null;
-                let publicationDomain = null;
-                let mediumPublication = null;
-
-                if (link1.includes('@')) {
-                  // Only non-custom user
-                  const username = link1.split('@')[1];
-                  userFeed = `medium.com/feed/@${username}`;
-                  if (link1 !== link2) {
-                    // Non-custom user + non-custom publication
-                    mediumPublication = link2.match(/medium\.com\/([^?]+)/)?.[1]
-                    if (!mediumPublication) {
-                      // const publicationUrl = new URL(link2)
-                      // publicationDomain = publicationUrl.hostname
-                      // Non-custom user + custom publication
-                      publicationDomain = link2
-                    }
-                  }
-                } else {
-                  // console.log({ link1, link2 })
-                  // Custom user
-                  userFeed = link1 + 'feed'
-                  // Custom user + non-custom publication
-                  mediumPublication = link2.match(/medium\.com\/([^?]+)/)?.[1]
-                  if (!mediumPublication) {
-                    // const publicationUrl = new URL(link2)
-                    // publicationDomain = publicationUrl.hostname
-                    // Custom user + custom publication
-                    publicationDomain = link2
-                  }
-                }
+                const mediumPublication =
+                  pubPath?.match(/medium\.com\/([^?/]+)/)?.[1] ?? null
+                const publicationDomain =
+                  !mediumPublication && pubPath ? pubPath : null
 
                 // Extract tags from URLs
                 const tags = links.map(url => {
