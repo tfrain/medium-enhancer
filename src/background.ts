@@ -4,6 +4,7 @@
 interface Feed {
   name: string; // Display name of the feed
   url: string;  // URL of the feed
+  type: 'user' | 'publication'; // Feed type for display purposes
 }
 
 /**
@@ -145,13 +146,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                 const publicationDomain =
                   !mediumPublication && pubPath ? pubPath : null
 
-                // Extract tags from URLs
-                const tags = links.map(url => {
-                  const match = url.match(/tag\/([^/?]+)/);
-                  return match ? match[1] : null;
-                }).filter(tag => tag !== null);
-
-                const feeds = generateFeeds(userFeed, mediumPublication, publicationDomain, tags)
+                const feeds = generateFeeds(userFeed, mediumPublication, publicationDomain)
                 chrome.action.setBadgeText({ text: feeds.length.toString(), tabId: tabId });
                 chrome.action.setBadgeBackgroundColor({ color: '#070707', tabId: tabId });
                 chrome.storage.local.set({ feeds });
@@ -176,38 +171,19 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   lastUrlByTab.delete(tabId)
 })
 
-/**
- * Generates a list of RSS feeds based on user, publication, and tags
- * @param userFeed - User feed URL
- * @param mediumPublication - Medium publication name
- * @param publicationDomain - Custom publication domain
- * @param tags - Array of tags found in the article
- * @returns Array of Feed objects with name and URL
- */
-const generateFeeds = (userFeed: string, mediumPublication: string, publicationDomain: string, tags: string[]) => {
+const generateFeeds = (
+  userFeed: string | null,
+  mediumPublication: string | null,
+  publicationDomain: string | null
+): Feed[] => {
   const feeds: Feed[] = []
   if (userFeed) {
-    // Profile page feed
-    feeds.push({ name: 'user feed', url: userFeed })
+    feeds.push({ name: 'User Feed', url: userFeed, type: 'user' })
   }
   if (mediumPublication) {
-    // Publication page feed
-    feeds.push({ name: 'publication feed', url: `medium.com/feed/${mediumPublication}` })
+    feeds.push({ name: 'Publication Feed', url: `medium.com/feed/${mediumPublication}`, type: 'publication' })
   } else if (publicationDomain) {
-    feeds.push({ name: 'publication feed', url: `${publicationDomain}feed` })
-  }
-  if (tags) {
-    if (mediumPublication) {
-      tags.forEach(tag => {
-        feeds.push({ name: `${tag} feed of publication`, url: `medium.com/feed/${mediumPublication}/tagged/${tag}` })
-      })
-    } else if (publicationDomain) {
-      // https://medium.programmerscareer.com/feed/tagged/technology
-      tags.forEach(tag => {
-        feeds.push({ name: `${tag} feed of publication`, url: `${publicationDomain}feed/tagged/${tag}` })
-      })
-    }
-    // https://medium.com/feed/tag/technology
+    feeds.push({ name: 'Publication Feed', url: `${publicationDomain}feed`, type: 'publication' })
   }
   return feeds
 }
