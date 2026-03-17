@@ -3,7 +3,7 @@
  */
 interface Feed {
   name: string; // Display name of the feed
-  url: string;  // URL of the feed
+  url: string;  // Scheme-less URL (e.g. "medium.com/feed/@user") — popup prepends "https://" at render time
   type: 'user' | 'publication'; // Feed type for display purposes
 }
 
@@ -78,6 +78,23 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
 });
 
+
+const generateFeeds = (
+  userFeed: string | null,
+  mediumPublication: string | null,
+  publicationDomain: string | null
+): Feed[] => {
+  const feeds: Feed[] = []
+  if (userFeed) {
+    feeds.push({ name: 'User Feed', url: userFeed, type: 'user' })
+  }
+  if (mediumPublication) {
+    feeds.push({ name: 'Publication Feed', url: `medium.com/feed/${mediumPublication}`, type: 'publication' })
+  } else if (publicationDomain) {
+    feeds.push({ name: 'Publication Feed', url: `${publicationDomain}feed`, type: 'publication' })
+  }
+  return feeds
+}
 
 // Track the last URL per tab to prevent duplicate processing
 const lastUrlByTab = new Map<number, string>()
@@ -170,20 +187,3 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   lastUrlByTab.delete(tabId)
 })
-
-const generateFeeds = (
-  userFeed: string | null,
-  mediumPublication: string | null,
-  publicationDomain: string | null
-): Feed[] => {
-  const feeds: Feed[] = []
-  if (userFeed) {
-    feeds.push({ name: 'User Feed', url: userFeed, type: 'user' })
-  }
-  if (mediumPublication) {
-    feeds.push({ name: 'Publication Feed', url: `medium.com/feed/${mediumPublication}`, type: 'publication' })
-  } else if (publicationDomain) {
-    feeds.push({ name: 'Publication Feed', url: `${publicationDomain}feed`, type: 'publication' })
-  }
-  return feeds
-}
