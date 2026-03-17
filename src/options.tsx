@@ -44,21 +44,17 @@ const Options = () => {
 				selectorInoreader: selectorInoreader,
 			}, () => {
 				if (!isResetLoad) {
-					setStatusMessage("Options saved"); // 设置提示信息
+					setStatusMessage("Options saved");
+					setTimeout(() => setStatusMessage(""), 3000);
 				}
-				// setIsFirstLoad(true);
 				setIsModified(false);
 				setIsResetLoad(false);
-				// setTimeout(() => {
-				// 	setStatusMessage("");
-				// 	setIsFirstLoad(false);
-				// }, 3000);
 			});
 		}
 	}, [showTip, rememberPos, autoType, selectorInoreader, isModified]);
 
 	const resetOptions = () => {
-		chrome.storage.local.clear(() => {
+		chrome.storage.local.remove(['isShowTip', 'isRememberPos', 'autoType', 'selectorInoreader'], () => {
 			setIsResetLoad(true);
 			setIsModified(true);
 
@@ -68,6 +64,7 @@ const Options = () => {
 			setSelectorInoreader(".article_content");
 			setTempSelectorInoreader(".article_content");
 			setStatusMessage("Reset saved");
+			setTimeout(() => setStatusMessage(""), 3000);
 		});
 	};
 

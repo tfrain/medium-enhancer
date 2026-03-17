@@ -166,11 +166,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                 const feeds = generateFeeds(userFeed, mediumPublication, publicationDomain)
                 chrome.action.setBadgeText({ text: feeds.length.toString(), tabId: tabId });
                 chrome.action.setBadgeBackgroundColor({ color: '#070707', tabId: tabId });
-                chrome.storage.local.set({ feeds });
-                chrome.storage.local.set({ isMediumPage: true });
+                chrome.storage.local.set({ [`feeds_${tabId}`]: feeds });
               } else {
                 chrome.action.setBadgeText({ text: '', tabId: tabId });
-                chrome.storage.local.set({ isMediumPage: false });
               }
             }
           }
@@ -186,4 +184,5 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 // Clean up per-tab state when a tab closes
 chrome.tabs.onRemoved.addListener((tabId) => {
   lastUrlByTab.delete(tabId)
+  chrome.storage.local.remove(`feeds_${tabId}`)
 })

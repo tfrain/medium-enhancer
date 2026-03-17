@@ -61,15 +61,17 @@ function IndexPopup() {
 
   useEffect(() => {
     let fallbackTimer: ReturnType<typeof setTimeout> | undefined
-    let activeTabUrl: string | undefined  // capture active tab URL for storage listener guard
+    let activeTabId: number | undefined
 
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       if (!tab || !tab.url) { setIsMediumPage(false); return }
-      activeTabUrl = tab.url
+      activeTabId = tab.id
       if (/-[0-9a-z]{10,}$/.test(tab.url)) {
-        chrome.storage.local.get(['feeds'], (result) => {
-          if (result.feeds && result.feeds.length > 0) {
-            setFeeds(result.feeds)
+        const feedsKey = `feeds_${tab.id}`
+        chrome.storage.local.get([feedsKey], (result) => {
+          const stored = result[feedsKey]
+          if (stored && stored.length > 0) {
+            setFeeds(stored)
             setIsMediumPage(true)
           } else {
             fallbackTimer = setTimeout(() => setIsMediumPage(true), 2500)
@@ -82,16 +84,13 @@ function IndexPopup() {
     })
 
     const storageListener = (changes: Record<string, chrome.storage.StorageChange>) => {
-      if (changes.feeds) {
-        // Only update if the storage write is still relevant to the tab this popup opened for
-        chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-          if (tab?.url === activeTabUrl) {
-            const newFeeds = changes.feeds.newValue || []
-            setFeeds(newFeeds)
-            clearTimeout(fallbackTimer)
-            setIsMediumPage(true)
-          }
-        })
+      if (activeTabId === undefined) return
+      const feedsKey = `feeds_${activeTabId}`
+      if (changes[feedsKey]) {
+        const newFeeds = changes[feedsKey].newValue || []
+        setFeeds(newFeeds)
+        clearTimeout(fallbackTimer)
+        setIsMediumPage(true)
       }
     }
 
