@@ -60,24 +60,18 @@ function IndexPopup() {
   const [isMediumPage, setIsMediumPage] = useState<boolean | null>(null)
 
   useEffect(() => {
-    // Closure-scoped timer — shared between the storage get callback,
-    // the storageListener, and the cleanup function.
     let fallbackTimer: ReturnType<typeof setTimeout> | undefined
+    let activeTabUrl: string | undefined  // capture active tab URL for storage listener guard
 
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      if (!tab || !tab.url) { setIsMediumPage(false); return }
+      activeTabUrl = tab.url
       if (/-[0-9a-z]{10,}$/.test(tab.url)) {
-        // URL matches Medium article pattern — check if feeds are already in storage.
-        // If feeds are present, transition immediately to the "found" state.
-        // If not (background.ts hasn't finished its 1s delay yet), stay in null/loading
-        // and let the storageListener below pick up feeds when they arrive.
         chrome.storage.local.get(['feeds'], (result) => {
           if (result.feeds && result.feeds.length > 0) {
             setFeeds(result.feeds)
             setIsMediumPage(true)
           } else {
-            // Feeds not yet written — stay in loading state.
-            // storageListener will deliver feeds when background.ts writes them.
-            // Fallback: if no feeds arrive within 2.5s, show "no feeds found".
             fallbackTimer = setTimeout(() => setIsMediumPage(true), 2500)
           }
         })
@@ -87,13 +81,17 @@ function IndexPopup() {
       }
     })
 
-    const storageListener = (changes) => {
+    const storageListener = (changes: Record<string, chrome.storage.StorageChange>) => {
       if (changes.feeds) {
-        const newFeeds = changes.feeds.newValue || []
-        setFeeds(newFeeds)
-        // Clear the fallback timer — feeds arrived before the timeout
-        clearTimeout(fallbackTimer)
-        setIsMediumPage(true)
+        // Only update if the storage write is still relevant to the tab this popup opened for
+        chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+          if (tab?.url === activeTabUrl) {
+            const newFeeds = changes.feeds.newValue || []
+            setFeeds(newFeeds)
+            clearTimeout(fallbackTimer)
+            setIsMediumPage(true)
+          }
+        })
       }
     }
 
