@@ -1,0 +1,144 @@
+/* Light mode tokens (default) */
+:root {
+  --bg: #ffffff;
+  --bg-card: #f7f7f7;
+  --text-primary: #000000;
+  --text-secondary: #555555;
+  --border: #e0e0e0;
+  --accent: #02b875;
+  --btn-bg: #f0f0f0;
+  --btn-bg-hover: #e0e0e0;
+  --btn-text: #000000;
+}
+
+/* Dark mode overrides */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a1a;
+    --bg-card: #2a2a2a;
+    --text-primary: #f0f0f0;
+    --text-secondary: #aaaaaa;
+    --border: #3a3a3a;
+    --accent: #02b875;
+    --btn-bg: #3a3a3a;
+    --btn-bg-hover: #4a4a4a;
+    --btn-text: #f0f0f0;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  width: 320px;
+}
+
+.popup-root {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 80px;
+}
+
+/* Header */
+.popup-header {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.2px;
+}
+
+/* State messages */
+.popup-message {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 8px 0;
+}
+
+/* Feed card */
+.feed-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.feed-card-type {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.feed-card-url {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: monospace;
+}
+
+.feed-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.feed-btn {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  transition: background 0.15s;
+}
+
+.feed-btn:hover {
+  background: var(--btn-bg-hover);
+}
+
+.feed-btn.copied {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Footer */
+.popup-footer {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.popup-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.popup-footer a:hover {
+  text-decoration: underline;
+}
