@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "Bash(grep:*)",
+      "Bash(git add:*)",
+      "Bash(pnpm build:*)",
+      "Bash(node:*)",
+      "Bash(git commit:*)",
+      "Bash(timeout 60 pnpm dev)"
+    ]
+  }
+}

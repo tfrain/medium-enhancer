@@ -182,7 +182,6 @@ const HEADING_TAG_WEIGHTS = {
   H4: 10,
   H5: 10,
   H6: 10,
-  // STRONG: 5,
 }
 export const extractHeadings = (articleDom: HTMLElement): Heading[] => {
   const isVisible = (elem: HTMLElement) => elem.offsetHeight !== 0
@@ -198,6 +197,8 @@ export const extractHeadings = (articleDom: HTMLElement): Heading[] => {
   const isHeadingGroupVisible = (group: HeadingGroup) => {
     return group.elems.filter(isVisible).length >= group.elems.length * 0.5
   }
+
+  if (isDebugging) console.log('[extract] extractHeadings called, articleDom:', articleDom?.tagName, articleDom?.className?.slice(0, 60))
 
   const headingTagGroups: HeadingGroup[] = Object.keys(HEADING_TAG_WEIGHTS)
     .map(
@@ -218,21 +219,25 @@ export const extractHeadings = (articleDom: HTMLElement): Heading[] => {
         }
         // for medium. filter out headings in flex container or with previous sibling div that is flex
         if (mediumArticle && (tag.toLowerCase() === 'h2' || tag.toLowerCase() === 'h3')) {
+          const beforeFilter = elems.length
           elems = elems.filter(
             (elem) => {
-              // 文章中链接medium的标题
+              // Headings inside <a> tags are related-article card headings, not real article headings
+              if (elem.closest('a') !== null) {
+                if (isDebugging) console.log('[extract] filtered (inside <a>):', elem.textContent)
+                return false;
+              }
+
               const parent = elem.parentElement;
-              const grandParent = parent?.parentElement;
               const isParentFlex = parent && parent.tagName.toLowerCase() === 'div' && getComputedStyle(parent).display === 'flex';
-              // 文章中链接medium的子标题
-              const isGrandParentFlex = tag.toLowerCase() === 'h3' && grandParent && grandParent.tagName.toLowerCase() === 'div' && getComputedStyle(grandParent).display === 'flex';
 
-              const prevSibling = parent && parent.previousElementSibling;
-              const isPrevSiblingFlex = prevSibling && prevSibling.tagName.toLowerCase() === 'div' && getComputedStyle(prevSibling).display === 'flex';
-
-              return !isParentFlex && !isPrevSiblingFlex && !isGrandParentFlex;
+              if (isParentFlex && isDebugging) {
+                console.log('[extract] filtered (flex):', elem.textContent, { isParentFlex })
+              }
+              return !isParentFlex;
             }
           )
+          if (isDebugging) console.log(`[extract] ${tag}: ${beforeFilter} → ${elems.length} after filter`)
         }
         return {
           tag,
@@ -241,7 +246,11 @@ export const extractHeadings = (articleDom: HTMLElement): Heading[] => {
         }
       },
     )
-    .filter((group) => group.score >= 10 && group.elems.length > 0)
+    .filter((group) => {
+      const pass = group.score >= 10 && group.elems.length > 0
+      if (isDebugging) console.log(`[extract] group ${group.tag}: elems=${group.elems.length} score=${group.score} pass=${pass}`)
+      return pass
+    })
     .filter((group) => isHeadingGroupVisible(group))
     .slice(0, 3)
 

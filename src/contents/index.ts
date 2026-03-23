@@ -5,10 +5,6 @@ import { isDebugging, offsetKey } from './util/env'
 import { showToast } from './util/toast'
 import type { PlasmoCSConfig } from "plasmo"
 
-/**
- * Configuration for the Plasmo content script
- * Specifies when and where the script should run
- */
 export const config: PlasmoCSConfig = {
   matches: [
     "http://*/*",
@@ -17,11 +13,6 @@ export const config: PlasmoCSConfig = {
   run_at: "document_end",
 }
 
-/**
- * Sets TOC position preferences based on stored settings
- * @param preference - The preference object to update
- * @param callback - Optional callback function to execute after preferences are set
- */
 function setPreference(preference, callback) {
   if (chrome.storage && chrome.storage.local) {
     const defaultOptions = {
@@ -48,12 +39,6 @@ function setPreference(preference, callback) {
   }
 }
 
-/**
- * Checks if a URL is a valid Medium article URL
- * Medium article URLs typically end with a dash followed by a 10+ character ID
- * @param url - The URL to check
- * @returns True if the URL matches the Medium article pattern
- */
 function isValidUrl(url: string): boolean {
   const regex = /-[0-9a-z]{10,}$/;
   return regex.test(url);
@@ -65,26 +50,17 @@ if (window === getContentWindow()) {
   }
   let isLoad = false;
   let isNewArticleDetected = true
-  let hasShownNoArticleToast = false  // Add this line to track toast display status
+  let hasShownNoArticleToast = false
 
   let toc: Toc | undefined
   let retryTimer: ReturnType<typeof setTimeout> | null = null
 
-  /**
-   * Starts the TOC generation process
-   * Extracts the article and headings, then renders the TOC
-   */
   const start = (): void => {
     const article = extractArticle()
     const headings = article && extractHeadings(article)
     renderToc(article, headings)
   }
 
-  /**
-   * Renders the Table of Contents for the article
-   * @param article - The article element
-   * @param headings - Array of heading elements found in the article
-   */
   const renderToc = (article, headings): void => {
     if (retryTimer) {
       clearTimeout(retryTimer)
@@ -98,39 +74,35 @@ if (window === getContentWindow()) {
     }
 
     if (!(article && headings && headings.length)) {
-      // Add delayed check
       retryTimer = setTimeout(() => {
         retryTimer = null
         const newArticle = extractArticle()
         const newHeadings = newArticle && extractHeadings(newArticle)
         if (!(newArticle && newHeadings && newHeadings.length)) {
-          chrome.storage.local.get({
-            isShowTip: true
-          }, function (items) {
+          chrome.storage.local.get({ isShowTip: true }, function (items) {
             if (items.isShowTip && !hasShownNoArticleToast) {
               showToast('No article/headings are detected.')
               hasShownNoArticleToast = true
+            }
+          })
+        } else {
+          renderToc(newArticle, newHeadings)
         }
-      });
-    } else {
-      renderToc(newArticle, newHeadings)
+      }, 500)
+      return
     }
-  }, 500)
-  return
-}
-hasShownNoArticleToast = false  // Reset status
+    hasShownNoArticleToast = false
     isNewArticleDetected = true
 
     toc = createToc({
       article,
       preference,
     })
-    toc.on('error', (error) => {
+    toc.on('error', () => {
       if (toc) {
         toc.dispose()
         toc = undefined
       }
-      // start()
     })
     toc.show()
   }
@@ -160,27 +132,16 @@ hasShownNoArticleToast = false  // Reset status
     },
   )
 
-  let observer: any = null;
+  let observer: MutationObserver | null = null;
   let innerObserver: MutationObserver | null = null
-  let timeoutTrack: any = null;
+  let timeoutTrack: ReturnType<typeof setInterval> | null = null;
 
   function domListener() {
-    var MutationObserver =
-      window.MutationObserver || window.WebKitMutationObserver
-    if (typeof MutationObserver !== 'function') {
-      console.error(
-        'DOM Listener Extension: MutationObserver is not available in your browser.',
-      )
-      return
-    }
-
     let domChangeCount = 0;
-    // 每次config中的dom内容变化，都会触发callback
     const callback = function (mutationsList, observer) {
       clearInterval(timeoutTrack);
       domChangeCount++;
       let intervalCount = 0;
-      // 每 300 毫秒执行一次，2/3次时可能渲染目录，直至4次结束
       timeoutTrack = setInterval(() => {
         intervalCount++;
         if (intervalCount === 4) {
@@ -193,7 +154,7 @@ hasShownNoArticleToast = false  // Reset status
         if (intervalCount == 1) {
           setPreference(preference, trackArticle)
         } else if (intervalCount > 1 && !isNewArticleDetected) {
-          detectToc() // 后续执行时，检测并渲染出目录
+          detectToc()
         }
       }, 300);
     }
@@ -233,13 +194,12 @@ hasShownNoArticleToast = false  // Reset status
     let isArticleChanged = (el && (el.id !== articleId || el.className !== articleContentClass)) || !el
     if (isArticleChanged) {
       isNewArticleDetected = false
-    hasShownNoArticleToast = false  // Add this line to reset toast status
+    hasShownNoArticleToast = false
       if (isDebugging) {
         console.log('refresh')
       }
       articleId = el ? el.id : ''
       articleContentClass = el ? el.className : ''
-      // Without start(), TOC won't be canceled promptly; with start(), "no headings" may show because content isn't fully loaded
       if (innerObserver) {
         innerObserver.disconnect()
         innerObserver = null
@@ -253,7 +213,6 @@ hasShownNoArticleToast = false  // Reset status
         }
       })
       innerObserver.observe(document, { childList: true, subtree: true })
-      // wwtd P2 不优雅的处理
       if (isMediumCom || isInoReaderCom) {
         start();
       }
@@ -289,7 +248,6 @@ hasShownNoArticleToast = false  // Reset status
       if (items.autoType === '2') {
         isAutoLoad = isMediumOrInoreader;
       }
-      // load 中会 start，也会调用 domListener
       if (isAutoLoad) {
         load();
       }

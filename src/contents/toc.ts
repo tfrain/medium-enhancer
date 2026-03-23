@@ -90,9 +90,7 @@ function activeHeadingStream({
     $isShown,
   )
     .filter(() => $isShown())
-    // 这里的 filter 操作符检查 $isShown() 是否为 true，即只有在目录显示时才会继续处理流中的值
     .map(([content, topbarHeight, _]) => {
-      // 解构赋值，从 content 对象中提取 article、scroller 和 headings 属性。
       const { article, scroller, headings } = content
       if (!(headings && headings.length)) {
         return 0
@@ -248,7 +246,6 @@ export function createToc(options: {
 
   const $topbarHeight = topbarStream($triggerTopbarMeasure, scroller).log('topbarHeight')
 
-  // 参数是通过对象解构传递的，因此顺序无关紧要。
   const $content = contentStream({
     $triggerContentChange,
     $periodicCheck,
@@ -402,5 +399,4 @@ export function createToc(options: {
   }
 }
 
-// 定义一个类型 Toc，这个类型是 createToc 函数返回值的类型
 export type Toc = ReturnType<typeof createToc>

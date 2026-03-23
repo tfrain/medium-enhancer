@@ -1,51 +1,25 @@
-/**
- * Interface representing a RSS feed with name and URL
- */
 interface Feed {
-  name: string; // Display name of the feed
+  name: string;
   url: string;  // Scheme-less URL (e.g. "medium.com/feed/@user") — popup prepends "https://" at render time
-  type: 'user' | 'publication'; // Feed type for display purposes
+  type: 'user' | 'publication';
 }
 
-/**
- * Gets the current active tab and passes it to the callback function
- * @param cb - Callback function that receives the active tab
- */
 const getCurrentTab = (cb) => {
   chrome.tabs.query({ active: true, currentWindow: true }, ([activeTab]) => {
     cb(activeTab)
   })
 }
 
-/**
- * Executes a command on the current tab
- * If the tab doesn't respond, attempts to inject the TOC script
- * @param command - Command to execute ('toggle', 'prev', 'next', etc.)
- */
 const execOnCurrentTab = (command) => {
   getCurrentTab((tab) => {
     if (tab && tab.url.indexOf("chrome") !== 0) {
-      chrome.tabs.sendMessage(tab.id, command, {}, (response) => {
-        if (!chrome.runtime.lastError) {
-          console.log({ response })
-        } else {
-          if (command === 'toggle' && response === undefined) {
-            // wwtd P2，无法识别。 这里不能识别到toc.ts，考虑将文件名存储起来，toc.86b6409e.js，然后这里进行获取，但是不急
-            chrome.scripting.executeScript({
-              target: { tabId: tab.id, allFrames: true },
-              files: ['toc.ts']
-            }, () => {
-              chrome.tabs.sendMessage(tab.id, command, {}, (response) => { }) // load then send again
-            })
-          }
-        }
+      chrome.tabs.sendMessage(tab.id, command, {}, () => {
+        chrome.runtime.lastError // suppress unchecked error
       })
     }
   })
 }
 
-// Listen for extension icon onClicked event
-// Listen for keyboard shortcut commands
 chrome.commands.onCommand.addListener((command) => execOnCurrentTab(command))
 
 chrome.contextMenus.onClicked.addListener(function (item, tab) {
@@ -67,8 +41,6 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   if (['install', 'update'].includes(details.reason)) {
     let url = chrome.runtime.getURL("options.html");
     await chrome.tabs.create({ url });
-    // chrome.tabs.create({ url: 'https://medium.programmerscareer.com/' });
-    // https://docs.google.com/forms/d/e/1FAIpQLSdwZSYMRBXmb3BU1lIm7LC5e8OZxYQFg_F2phvvAf0X-zhIDQ/viewform
     const feedbackFormId =
       '1FAIpQLSdwZSYMRBXmb3BU1lIm7LC5e8OZxYQFg_F2phvvAf0X-zhIDQ';
     const feedbackFormUrl = `https://docs.google.com/forms/d/e/${feedbackFormId}/viewform`;
@@ -99,16 +71,12 @@ const generateFeeds = (
 // Track the last URL per tab to prevent duplicate processing
 const lastUrlByTab = new Map<number, string>()
 
-/**
- * Listens for tab updates to detect Medium articles and extract RSS feeds
- * Only processes when page is fully loaded and URL has changed
- */
+console.log('[bg] background.ts loaded, version=2')
+
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  // Only execute when page is fully loaded and URL is different from last time
   if (changeInfo.status === 'complete' && tab.url && tab.url !== lastUrlByTab.get(tabId)) {
     lastUrlByTab.set(tabId, tab.url)
 
-    // 检查是否是 Medium 文章页面
     if (/-[0-9a-z]{10,}$/.test(tab.url)) {
       setTimeout(() => {
         chrome.scripting.executeScript({
@@ -117,9 +85,30 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             const urlObj = new URL(currentUrl)
             const articleId = /-([0-9a-z]{10,})$/.exec(urlObj.pathname)?.[1]
             if (articleId) {
-              const queryData = `a[href*="${articleId}"]`
-              const links = Array.from(document.querySelectorAll(queryData))
-                .map(link => (link as HTMLAnchorElement).href)
+              // Primary: <link rel="alternate" type="application/rss+xml"> in <head>
+              const alternateFeedLinks = Array.from(
+                document.querySelectorAll('link[rel="alternate"][type="application/rss+xml"]')
+              ).map(el => (el as HTMLLinkElement).href)
+
+              // Secondary: <a> links with /feed in href
+              const anchorFeedLinks = Array.from(
+                document.querySelectorAll('a[href*="/feed"]')
+              ).map(el => (el as HTMLAnchorElement).href)
+
+              // Tertiary: author profile links (/@username), excluding commenter links
+              // Commenters have ?source=...post_responses... in URL; author byline does not
+              const authorProfileLinks = Array.from(
+                document.querySelectorAll('a[href*="/@"]')
+              ).map(el => (el as HTMLAnchorElement).href)
+                .filter(href => {
+                  try {
+                    const u = new URL(href)
+                    if (u.searchParams.get('source')?.includes('post_responses')) return false
+                    return /^\/@[^/?]+\/?$/.test(u.pathname)
+                  } catch { return false }
+                })
+
+              const links = [...new Set([...alternateFeedLinks, ...anchorFeedLinks, ...authorProfileLinks])]
               return { isMediumPage: true, articleId, links }
             }
             return { isMediumPage: false, articleId: null, links: [] }
@@ -128,20 +117,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         },
           (results) => {
             if (results && results[0] && results[0].result) {
-              const { isMediumPage, articleId, links } = results[0].result
-              // setIsMediumPage(isMediumPage)
+              const { isMediumPage, links } = results[0].result
               if (isMediumPage) {
-                // setArticleId(articleId)
-                // Semantic search — safe regardless of link count or order
-                // Standard user: contains /feed/@ (medium.com/@user)
+                // Explicit feed links from <link rel="alternate"> or <a href*="/feed">
                 const standardUserFeedLink = links.find((l) => l.includes('/feed/@'))
-
-                // Custom subdomain user: *.medium.com/feed (e.g. wesley-wei.medium.com/feed)
                 const customUserFeedLink = links.find((l) => /\/\/[^/.]+\.medium\.com\/feed(?:\/|\?|$)/.test(l))
-
                 const userFeedLink = standardUserFeedLink ?? customUserFeedLink ?? null
 
-                // Publication: /feed/ with a slug (no @), or custom non-medium.com domain /feed
                 const pubFeedLink = links.find(
                   (l) =>
                     l !== userFeedLink &&
@@ -149,17 +131,29 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                       /\/\/medium\.[^.]+\.[^/]+\/feed(?:\/|\?|$)/.test(l))
                 )
 
-                // Optional chaining throughout — never crashes on undefined
                 const userPath = userFeedLink?.match(/\/\/([^?]+)/)?.[1] ?? null
                 const pubPath  = pubFeedLink?.match(/\/\/([^?]+)/)?.[1] ?? null
 
-                // Normalise: ensure userFeed ends with /feed
-                const userFeed = userPath
-                  ? userPath.includes('/feed') ? userPath : userPath.replace(/\/?$/, '/feed')
+                // Fallback: construct author feed from byline link (any domain, /@username path)
+                const authorLink = !userPath
+                  ? links.find((l) => { try { return /^\/@[^/?]+\/?$/.test(new URL(l).pathname) } catch { return false } })
+                  : undefined
+                const authorFeed = authorLink
+                  ? (() => { try { const u = new URL(authorLink); return `${u.hostname}/feed${u.pathname.replace(/\/$/, '')}` } catch { return null } })()
                   : null
 
+                const userFeed = userPath
+                  ? userPath.includes('/feed') ? userPath : userPath.replace(/\/?$/, '/feed')
+                  : authorFeed
+
+                // Fallback: extract publication slug directly from the article URL path
+                // e.g. medium.com/predict/article-slug → "predict"
+                const urlParts = new URL(tab.url).pathname.split('/').filter(Boolean)
+                const publicationFromUrl = urlParts.length >= 2 && urlParts[0] && !urlParts[0].startsWith('@')
+                  ? urlParts[0] : null
+
                 const mediumPublication =
-                  pubPath?.match(/medium\.com\/feed\/([^/?]+)/)?.[1] ?? null
+                  pubPath?.match(/medium\.com\/feed\/([^/?]+)/)?.[1] ?? publicationFromUrl ?? null
                 const publicationDomain =
                   !mediumPublication && pubPath ? pubPath : null
 
@@ -173,10 +167,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             }
           }
         )
-      }, 1000)  // Add delay to ensure DOM is fully loaded
+      }, 1000)
     } else {
       chrome.action.setBadgeText({ text: '', tabId: tabId });
-      chrome.storage.local.set({ isMediumPage: false });
     }
   }
 });
