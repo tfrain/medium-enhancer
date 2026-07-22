@@ -1,10 +1,19 @@
 // Floating "Cite yourself" button + panel, shown only on the Medium story
-// editor page. Lists the author's own top-earning past posts (real revenue,
-// pulled live via self-cite.ts) and copies a chosen post's URL to the
-// clipboard — paste it on its own line in the editor and Medium turns it
-// into a native mixtape preview card automatically.
+// editor page. Lists the author's own past posts — ranked by topical
+// relevance to the draft being written (revenue only breaks ties, per
+// user feedback 2026-07-22: pure revenue ranking surfaced unrelated posts) —
+// and can either copy a bare URL (paste on its own line -> Medium mixtape
+// card) or generate a one-sentence "why read this" recommendation via the
+// same local Ollama / cloud AI already wired for summarize.
 
-import { fetchTopEarners, isMediumEditorPage, type SelfCitePost } from './lib/self-cite'
+import {
+  fetchTopEarners,
+  generateTeaser,
+  getCurrentDraftTitle,
+  isMediumEditorPage,
+  scoreRelevance,
+  type SelfCitePost,
+} from './lib/self-cite'
 import { showToast } from './util/toast'
 
 const BALL_ID = '__me_selfcite_ball__'
@@ -37,8 +46,8 @@ const CSS = `
   position: fixed;
   bottom: 74px;
   left: 24px;
-  width: 380px;
-  max-height: 60vh;
+  width: 400px;
+  max-height: 65vh;
   overflow-y: auto;
   background: #ffffff;
   border: 1px solid #e0e0e0;
@@ -62,9 +71,7 @@ const CSS = `
 #${PANEL_ID} .me-sc-item {
   padding: 10px 14px;
   border-bottom: 1px solid #f2f2f2;
-  cursor: pointer;
 }
-#${PANEL_ID} .me-sc-item:hover { background: #f7f7f7; }
 #${PANEL_ID} .me-sc-title {
   font-size: 13px;
   color: #1a1a1a;
@@ -74,6 +81,38 @@ const CSS = `
 #${PANEL_ID} .me-sc-meta {
   font-size: 11px;
   color: #757575;
+  margin-bottom: 6px;
+}
+#${PANEL_ID} .me-sc-relevance {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-right: 6px;
+}
+#${PANEL_ID} .me-sc-relevance.high { background: #d7f3df; color: #0f6b2c; }
+#${PANEL_ID} .me-sc-relevance.mid { background: #fdecc8; color: #8a5a00; }
+#${PANEL_ID} .me-sc-relevance.low { background: #eeeeee; color: #757575; }
+#${PANEL_ID} .me-sc-actions {
+  display: flex;
+  gap: 8px;
+}
+#${PANEL_ID} .me-sc-btn {
+  font-size: 11px;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background: #fafafa;
+  cursor: pointer;
+  color: #1a1a1a;
+}
+#${PANEL_ID} .me-sc-btn:hover { background: #f0f0f0; }
+#${PANEL_ID} .me-sc-btn:disabled { opacity: 0.5; cursor: default; }
+#${PANEL_ID} .me-sc-status {
+  font-size: 11px;
+  color: #757575;
+  margin-top: 4px;
 }
 #${PANEL_ID} .me-sc-empty {
   padding: 20px 14px;
@@ -108,19 +147,43 @@ const onDocClick = (e: MouseEvent) => {
   closePanel()
 }
 
-const renderPanel = (username: string, posts: SelfCitePost[] | null, error: string | null) => {
+type RankedPost = SelfCitePost & { relevance: number }
+
+const relevanceBand = (score: number): 'high' | 'mid' | 'low' => {
+  if (score >= 0.34) return 'high'
+  if (score > 0) return 'mid'
+  return 'low'
+}
+
+const copyText = async (text: string, successMsg: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    showToast(successMsg)
+  } catch {
+    showToast('复制失败，请手动复制')
+  }
+}
+
+const renderPanel = (
+  username: string,
+  draftTitle: string,
+  posts: RankedPost[] | null,
+  error: string | null,
+) => {
   closePanel()
   const el = document.createElement('div')
   el.id = PANEL_ID
 
   const header = document.createElement('div')
   header.className = 'me-sc-header'
-  header.textContent = `@${username} 的过往表现（按真实收益排序）`
+  header.textContent = `@${username} 的过往文章（按相关度排序，收益仅作同等相关度下的次要排序）`
   el.appendChild(header)
 
   const sub = document.createElement('div')
   sub.className = 'me-sc-sub'
-  sub.textContent = '点击复制链接，粘贴到正文单独一行会自动生成 Medium 卡片'
+  sub.textContent = draftTitle
+    ? `当前草稿标题：${draftTitle}`
+    : '未读取到草稿标题，本次只按收益排序'
   el.appendChild(sub)
 
   if (error) {
@@ -145,18 +208,56 @@ const renderPanel = (username: string, posts: SelfCitePost[] | null, error: stri
 
       const meta = document.createElement('div')
       meta.className = 'me-sc-meta'
+      const band = relevanceBand(p.relevance)
+      const badge = document.createElement('span')
+      badge.className = `me-sc-relevance ${band}`
+      badge.textContent = band === 'high' ? '相关度高' : band === 'mid' ? '相关度中' : '相关度低'
+      meta.appendChild(badge)
       const pub = p.publication ? `${p.publication} · ` : ''
-      meta.textContent = `${pub}$${p.revenueUsd.toFixed(2)}`
+      meta.appendChild(document.createTextNode(`${pub}$${p.revenueUsd.toFixed(2)}`))
       item.appendChild(meta)
 
-      item.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(p.url)
-          showToast('链接已复制，粘贴到正文会自动生成卡片')
-        } catch {
-          showToast('复制失败，请手动复制：' + p.url)
-        }
+      const actions = document.createElement('div')
+      actions.className = 'me-sc-actions'
+
+      const copyLinkBtn = document.createElement('button')
+      copyLinkBtn.className = 'me-sc-btn'
+      copyLinkBtn.type = 'button'
+      copyLinkBtn.textContent = '复制链接'
+      copyLinkBtn.addEventListener('click', () => {
+        copyText(p.url, '链接已复制，粘贴到正文单独一行会自动生成卡片')
         closePanel()
+      })
+      actions.appendChild(copyLinkBtn)
+
+      const aiBtn = document.createElement('button')
+      aiBtn.className = 'me-sc-btn'
+      aiBtn.type = 'button'
+      aiBtn.textContent = 'AI 推荐语 + 链接'
+      actions.appendChild(aiBtn)
+
+      item.appendChild(actions)
+
+      const status = document.createElement('div')
+      status.className = 'me-sc-status'
+      status.style.display = 'none'
+      item.appendChild(status)
+
+      aiBtn.addEventListener('click', async () => {
+        aiBtn.disabled = true
+        copyLinkBtn.disabled = true
+        status.style.display = 'block'
+        status.textContent = '生成中…'
+        try {
+          const teaser = await generateTeaser(draftTitle, p.title)
+          const combined = `${teaser}\n\n${p.url}`
+          await copyText(combined, '推荐语 + 链接已复制')
+          closePanel()
+        } catch (e) {
+          status.textContent = `生成失败：${(e as Error).message}`
+          aiBtn.disabled = false
+          copyLinkBtn.disabled = false
+        }
       })
 
       el.appendChild(item)
@@ -178,12 +279,19 @@ const openPanel = async () => {
   }
   chrome.storage.local.get({ selfCiteUsername: DEFAULT_USERNAME }, async (items) => {
     const username = items.selfCiteUsername || DEFAULT_USERNAME
-    renderPanel(username, null, null)
+    const draftTitle = getCurrentDraftTitle()
+    renderPanel(username, draftTitle, null, null)
     try {
-      const posts = await fetchTopEarners(username, 6)
-      renderPanel(username, posts, null)
+      // Pull a larger pool than we'll display, so relevance re-ranking has
+      // something to actually rank instead of just the top-6-by-revenue.
+      const pool = await fetchTopEarners(username, 20)
+      const ranked: RankedPost[] = pool
+        .map((p) => ({ ...p, relevance: scoreRelevance(draftTitle, p.title) }))
+        .sort((a, b) => b.relevance - a.relevance || b.revenueUsd - a.revenueUsd)
+        .slice(0, 6)
+      renderPanel(username, draftTitle, ranked, null)
     } catch (e) {
-      renderPanel(username, null, (e as Error).message)
+      renderPanel(username, draftTitle, null, (e as Error).message)
     }
   })
 }

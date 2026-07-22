@@ -42,6 +42,55 @@ export const isMediumEditorPage = (): boolean => {
   return onMedium && isEditorPathname(window.location.pathname)
 }
 
+// Best-effort read of the draft title straight out of the editor's contenteditable
+// title field. Medium's DOM has shifted selectors before, so this tries a few
+// fallbacks and returns '' (not a hard error) if none match — callers should
+// degrade to revenue-only sorting rather than fail outright.
+const TITLE_SELECTORS = [
+  '[data-testid="editorTitleParagraph"]',
+  'article [data-testid*="title" i][contenteditable]',
+  'h1[contenteditable], h3[contenteditable]',
+  '.graf--title',
+]
+
+export const getCurrentDraftTitle = (): string => {
+  for (const sel of TITLE_SELECTORS) {
+    const el = document.querySelector(sel)
+    const text = el?.textContent?.trim()
+    if (text) return text
+  }
+  return ''
+}
+
+const STOPWORDS = new Set([
+  'the', 'a', 'an', 'of', 'to', 'in', 'on', 'for', 'and', 'or', 'is', 'are',
+  'was', 'were', 'it', 'its', 'that', 'this', 'with', 'you', 'your', 'he',
+  'his', 'she', 'her', 'they', 'their', 'be', 'has', 'have', 'how', 'why',
+  'what', 'when', 'from', 'but', 'not', 'my', 'me', 'i', 'we', 'our',
+])
+
+const tokenize = (s: string): Set<string> => {
+  const words = s
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !STOPWORDS.has(w))
+  return new Set(words)
+}
+
+// Overlap-coefficient word match between the draft title and a candidate post's
+// title — crude, but needs zero extra infra (no access to our local writeflow DB
+// from inside the extension sandbox) and is enough to stop an unrelated
+// high-earning post from outranking an actually-relevant lower-earning one.
+export const scoreRelevance = (draftTitle: string, candidateTitle: string): number => {
+  const a = tokenize(draftTitle)
+  const b = tokenize(candidateTitle)
+  if (a.size === 0 || b.size === 0) return 0
+  let overlap = 0
+  for (const w of a) if (b.has(w)) overlap++
+  return overlap / Math.min(a.size, b.size)
+}
+
 let cache: { username: string; posts: SelfCitePost[]; fetchedAt: number } | null = null
 const CACHE_TTL_MS = 10 * 60 * 1000 // 10min — avoid refetching on every URL-poll tick
 
@@ -89,4 +138,82 @@ export const fetchTopEarners = async (username: string, limit = 5): Promise<Self
   posts.sort((a, b) => b.revenueUsd - a.revenueUsd)
   cache = { username, posts, fetchedAt: Date.now() }
   return posts.slice(0, limit)
+}
+
+// Ask the same local Ollama / cloud (BYOK) provider already wired for AI summarize
+// (see options.tsx "AI Provider") for one short "why read this" sentence, so
+// self-citing doesn't leave the user to write that transition line by hand.
+// Reuses background.ts's existing generic 'summarize' port protocol — no
+// background.ts changes needed, it already accepts any {instruction,title,text}.
+export const generateTeaser = (draftTitle: string, candidateTitle: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(
+      {
+        ollamaBaseUrl: 'http://localhost:11434',
+        ollamaModel: '',
+        aiProvider: 'ollama',
+        aiApiKey: '',
+        aiCloudModel: '',
+      },
+      (cfg) => {
+        const provider = cfg.aiProvider === 'openai' || cfg.aiProvider === 'anthropic' ? cfg.aiProvider : 'ollama'
+        const model = provider === 'ollama' ? cfg.ollamaModel : cfg.aiCloudModel
+        if (!model) {
+          reject(new Error(provider === 'ollama' ? 'No Ollama model selected in Options.' : `No ${provider} model configured in Options.`))
+          return
+        }
+        if (provider !== 'ollama' && !cfg.aiApiKey) {
+          reject(new Error(`No ${provider} API key configured in Options.`))
+          return
+        }
+
+        const instruction =
+          'You are helping a writer add a "further reading" recommendation for their own past article ' +
+          'at the end of a new draft. Write exactly ONE short sentence (under 25 words) recommending the ' +
+          'reader check out that past article, in the SAME language as the draft title below. ' +
+          'Output ONLY that one sentence — no quotes, no labels, no extra commentary.'
+
+        let accumulated = ''
+        let settled = false
+        const port = chrome.runtime.connect({ name: 'summarize' })
+        const timeout = window.setTimeout(() => {
+          if (settled) return
+          settled = true
+          try { port.disconnect() } catch {}
+          reject(new Error('Timed out waiting for a response.'))
+        }, 30000)
+
+        port.onMessage.addListener((msg: any) => {
+          if (msg.type === 'chunk') {
+            accumulated += msg.chunk
+          } else if (msg.type === 'done') {
+            if (settled) return
+            settled = true
+            window.clearTimeout(timeout)
+            resolve(accumulated.trim().replace(/^["“]|["”]$/g, ''))
+          } else if (msg.type === 'error') {
+            if (settled) return
+            settled = true
+            window.clearTimeout(timeout)
+            reject(new Error(msg.error || 'AI request failed'))
+          }
+        })
+        port.onDisconnect.addListener(() => {
+          if (settled) return
+          settled = true
+          window.clearTimeout(timeout)
+          reject(new Error('Connection closed before a response arrived.'))
+        })
+        port.postMessage({
+          instruction,
+          title: draftTitle || '(untitled draft)',
+          text: candidateTitle,
+          baseUrl: cfg.ollamaBaseUrl || 'http://localhost:11434',
+          model,
+          provider,
+          apiKey: cfg.aiApiKey,
+        })
+      },
+    )
+  })
 }
