@@ -84,7 +84,11 @@ const tokenize = (s: string): Set<string> => {
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
-    .filter((w) => w.length > 2 && !STOPWORDS.has(w))
+    // length > 1, not > 2 — a > 2 cutoff was silently dropping short but
+    // meaningful tech terms (AI, Go, ML, UX, OS...), exactly the words most
+    // likely to carry real topical signal in this author's writing. Real
+    // function words that length alone wouldn't catch are in STOPWORDS.
+    .filter((w) => w.length > 1 && !STOPWORDS.has(w))
   return new Set(words)
 }
 

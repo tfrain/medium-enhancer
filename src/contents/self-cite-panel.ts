@@ -175,17 +175,36 @@ const renderPanel = (
     : '未读取到草稿标题，本次只按收益排序'
   el.appendChild(sub)
 
+  const bestScore = posts && posts.length ? posts[0].relevance : -1
+
   if (error) {
     const empty = document.createElement('div')
     empty.className = 'me-sc-empty'
     empty.textContent = `拉取失败：${error}`
     el.appendChild(empty)
-  } else if (!posts || posts.length === 0) {
+  } else if (!posts) {
     const empty = document.createElement('div')
     empty.className = 'me-sc-empty'
     empty.textContent = '加载中…'
     el.appendChild(empty)
+  } else if (draftTitle && bestScore === 0) {
+    // No candidate shares any real title vocabulary with the draft — showing
+    // a ranked list here would just be the old "irrelevant but ranked" bug
+    // wearing a relevance badge. Say so plainly instead of listing anything;
+    // per the same rule already used for the Maintainer Profile self-cite
+    // workflow, no good match means skip the citation, not settle for one.
+    const empty = document.createElement('div')
+    empty.className = 'me-sc-empty'
+    empty.textContent = '没有找到主题相关的旧文章，这次不建议做自引用。'
+    el.appendChild(empty)
   } else {
+    if (draftTitle && bestScore >= 0 && bestScore < 0.34) {
+      const warn = document.createElement('div')
+      warn.className = 'me-sc-empty'
+      warn.style.color = '#8a5a00'
+      warn.textContent = '相关度都不高，请自行判断是否值得引用，而不是照单推荐。'
+      el.appendChild(warn)
+    }
     for (const p of posts) {
       const item = document.createElement('div')
       item.className = 'me-sc-item'
