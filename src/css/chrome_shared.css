@@ -24,8 +24,8 @@ html.loading * {
 body {
   display: flex;
   justify-content: center;
-  align-items: center;
-  height: 100vh;
+  align-items: flex-start;
+  min-height: 100vh;
   margin: 0;
   font-family: 'Segoe UI', Tahoma, sans-serif;
   font-size: 75%;

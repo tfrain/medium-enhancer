@@ -1,8 +1,8 @@
 {
   "name": "medium-enhancer",
   "displayName": "Medium Enhancer",
-  "version": "0.0.3",
-  "description": "Enhance your Medium experience with features like TOC (Table of Contents) and RSS support.",
+  "version": "0.3.0",
+  "description": "AI summaries (local Ollama or your own OpenAI/Anthropic key), one-click Markdown/Obsidian export, and RSS discovery for any long-form article.",
   "author": "Wesley Wei",
   "scripts": {
     "dev": "plasmo dev",
@@ -10,7 +10,6 @@
     "package": "plasmo package"
   },
   "dependencies": {
-    "mithril": "^2.0.4",
     "plasmo": "0.90.5",
     "react": "18.2.0",
     "react-dom": "18.2.0"
@@ -18,7 +17,6 @@
   "devDependencies": {
     "@ianvs/prettier-plugin-sort-imports": "4.1.1",
     "@types/chrome": "0.0.258",
-    "@types/mithril": "^2.0.8",
     "@types/node": "20.11.5",
     "@types/react": "18.2.48",
     "@types/react-dom": "18.2.18",
@@ -27,29 +25,26 @@
   },
   "manifest": {
     "host_permissions": [
-      "https://*/*"
+      "https://*/*",
+      "http://localhost/*",
+      "http://127.0.0.1/*"
     ],
     "commands": {
-      "toggle": {
+      "summarize": {
         "suggested_key": {
-          "default": "Ctrl+Shift+E",
-          "mac": "Command+Shift+E",
-          "chromeos": "Ctrl+Shift+E",
-          "linux": "Ctrl+Shift+E"
+          "default": "Ctrl+Shift+S",
+          "mac": "Command+Shift+S"
         },
-        "description": "Load/unload TOC"
-      },
-      "prev": {
-        "description": "Jump to previous heading"
-      },
-      "next": {
-        "description": "Jump to next heading"
+        "description": "Summarize current page with AI"
       }
     },
     "permissions": [
       "storage",
       "contextMenus",
-      "scripting"
+      "scripting",
+      "declarativeNetRequest",
+      "activeTab",
+      "clipboardWrite"
     ],
     "author": "cwei3790@gmail.com"
   }

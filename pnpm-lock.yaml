@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      mithril:
-        specifier: ^2.0.4
-        version: 2.2.12
       plasmo:
         specifier: 0.90.5
         version: 0.90.5(@swc/core@1.10.2(@swc/helpers@0.5.15))(@swc/helpers@0.5.15)(@types/node@20.11.5)(lodash@4.17.21)(postcss@8.4.49)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -27,9 +24,6 @@ importers:
       '@types/chrome':
         specifier: 0.0.258
         version: 0.0.258
-      '@types/mithril':
-        specifier: ^2.0.8
-        version: 2.2.7
       '@types/node':
         specifier: 20.11.5
         version: 20.11.5
@@ -1555,9 +1549,6 @@ packages:
   '@types/http-cache-semantics@4.0.4':
     resolution: {integrity: sha512-1m0bIFVc7eJWyve9S0RnuRgcQqF/Xd5QsUZAZeQFr1Q3/p9JWoQQEqmVy+DPTNpGXwhgIetAoYF8JSc33q29QA==}
 
-  '@types/mithril@2.2.7':
-    resolution: {integrity: sha512-uetxoYizBMHPELl6DSZUfO6Q/aOm+h0NUCv9bVAX2iAxfrdBSOvU9KKFl+McTtxR13F+BReYLY814pJsZvnSxg==}
-
   '@types/node@20.11.5':
     resolution: {integrity: sha512-g557vgQjUUfN76MZAN/dt1z3dzcUsimuysco0KeluHgrPdJXkP/XdAURgyO2W9fZWHRtRBiVKzKn8vyOAwlG+w==}
 
@@ -2495,9 +2486,6 @@ packages:
   minipass@7.1.2:
     resolution: {integrity: sha512-qOOzS1cBTWYF4BH8fVePDBOO9iptMnGUEZwNc/cMWnTV2nVLZ7VoNWEPHkYczZA0pdoA7dl6e7FL659nX9S2aw==}
     engines: {node: '>=16 || 14 >=14.17'}
-
-  mithril@2.2.12:
-    resolution: {integrity: sha512-EpHb0DkcfwB+83NYvU8WMGBib+/TBtFLzdvYYXijqcW0o1i6cpVPklrCglJi2COXT2MG0Kih81CNPCoZkj0vag==}
 
   mnemonic-id@3.2.7:
     resolution: {integrity: sha512-kysx9gAGbvrzuFYxKkcRjnsg/NK61ovJOV4F1cHTRl9T5leg+bo6WI0pWIvOFh1Z/yDL0cjA5R3EEGPPLDv/XA==}
@@ -4837,8 +4825,6 @@ snapshots:
 
   '@types/http-cache-semantics@4.0.4': {}
 
-  '@types/mithril@2.2.7': {}
-
   '@types/node@20.11.5':
     dependencies:
       undici-types: 5.26.5
@@ -5746,8 +5732,6 @@ snapshots:
   minimist@1.2.8: {}
 
   minipass@7.1.2: {}
-
-  mithril@2.2.12: {}
 
   mnemonic-id@3.2.7: {}
 

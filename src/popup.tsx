@@ -66,7 +66,7 @@ function IndexPopup() {
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       if (!tab || !tab.url) { setIsMediumPage(false); return }
       activeTabId = tab.id
-      if (/-[0-9a-z]{10,}$/.test(tab.url)) {
+      if (/-[0-9a-z]{10,}(?:[/?#]|$)/i.test(tab.url)) {
         const feedsKey = `feeds_${tab.id}`
         chrome.storage.local.get([feedsKey], (result) => {
           const stored = result[feedsKey]

@@ -1,8 +1,10 @@
-import { extractArticle, extractHeadings } from './lib/extract'
+import { AI_PRESETS } from './ai-presets'
+import { extractArticle, extractArticleTextForAI } from './lib/extract'
 import { getContentWindow } from './lib/iframe'
-import { createToc, type Toc, type TocPreference } from './toc'
-import { isDebugging, offsetKey } from './util/env'
-import { showToast } from './util/toast'
+import { mountSummaryBall, unmountSummaryBall } from './summary-ball'
+import { showAiPanel } from './summary-panel'
+import { mountSelfCiteBall, unmountSelfCiteBall } from './self-cite-panel'
+import { DEFAULT_SITE_ALLOWLIST, isHostAllowed, mergeDefaultSiteAllowlist } from '../shared/site-access'
 import type { PlasmoCSConfig } from "plasmo"
 
 export const config: PlasmoCSConfig = {
@@ -13,271 +15,80 @@ export const config: PlasmoCSConfig = {
   run_at: "document_end",
 }
 
-function setPreference(preference, callback) {
-  if (chrome.storage && chrome.storage.local) {
-    const defaultOptions = {
-      isRememberPos: true
-    }
-    defaultOptions[offsetKey] = { x: 0, y: 0 };
-    chrome.storage.local.get(defaultOptions, function (result) {
-      const offset = result[offsetKey];
-      if (result.isRememberPos) {
-        preference.offset.x = offset.x;
-        preference.offset.y = offset.y;
-      }
-      else {
-        preference.offset.x = 0;
-        preference.offset.y = 0;
-      }
-      if (callback) {
-        callback();
-      }
-    });
-  }
-  else if (callback) {
-    callback();
-  }
-}
-
-function isValidUrl(url: string): boolean {
-  const regex = /-[0-9a-z]{10,}$/;
-  return regex.test(url);
-}
-
 if (window === getContentWindow()) {
-  let preference: TocPreference = {
-    offset: { x: 0, y: 0 },
-  }
-  let isLoad = false;
-  let isNewArticleDetected = true
-  let hasShownNoArticleToast = false
-
-  let toc: Toc | undefined
-  let retryTimer: ReturnType<typeof setTimeout> | null = null
-
-  const start = (): void => {
-    const article = extractArticle()
-    const headings = article && extractHeadings(article)
-    renderToc(article, headings)
-  }
-
-  const renderToc = (article, headings): void => {
-    if (retryTimer) {
-      clearTimeout(retryTimer)
-      retryTimer = null
-    }
-    if (toc) {
-      toc.dispose()
-    }
-    if (isMediumOrInoreader && (isInoReaderCom || (isMediumComPrefix && !isValidUrl(window.location.pathname)))) {
-      return
-    }
-
-    if (!(article && headings && headings.length)) {
-      retryTimer = setTimeout(() => {
-        retryTimer = null
-        const newArticle = extractArticle()
-        const newHeadings = newArticle && extractHeadings(newArticle)
-        if (!(newArticle && newHeadings && newHeadings.length)) {
-          chrome.storage.local.get({ isShowTip: true }, function (items) {
-            if (items.isShowTip && !hasShownNoArticleToast) {
-              showToast('No article/headings are detected.')
-              hasShownNoArticleToast = true
-            }
-          })
-        } else {
-          renderToc(newArticle, newHeadings)
-        }
-      }, 500)
-      return
-    }
-    hasShownNoArticleToast = false
-    isNewArticleDetected = true
-
-    toc = createToc({
-      article,
-      preference,
-    })
-    toc.on('error', () => {
-      if (toc) {
-        toc.dispose()
-        toc = undefined
-      }
-    })
-    toc.show()
-  }
-
   chrome.runtime.onMessage.addListener(
-    (request: 'toggle' | 'prev' | 'next' | 'refresh' | 'load' | 'unload', sender, sendResponse) => {
-      if (request === 'load' || request === 'unload') {
-        sendResponse(true)
-        return
-      }
-      try {
-        if (!isLoad || request === 'refresh') {
-          load();
-        } else {
-          if (toc) {
-            toc[request]()
-          }
-          if (isLoad && request === 'toggle') {
-            unload()
-          }
+    (request: any, sender, sendResponse) => {
+      if (typeof request === 'object' && request?.type === 'showSummaryPanel') {
+        try {
+          const article = extractArticle()
+          const text = extractArticleTextForAI(article)
+          const summarize = AI_PRESETS.find((p) => p.id === 'summarize') || AI_PRESETS[0]
+          showAiPanel({
+            headline: summarize.label,
+            instruction: summarize.instruction,
+            articleText: text,
+            articleTitle: document.title || '',
+          })
+          sendResponse({ ok: true })
+        } catch (e) {
+          sendResponse({ ok: false, error: (e as Error).message })
         }
-        sendResponse(true)
-      } catch (e) {
-        console.error(e)
-        sendResponse(false)
       }
     },
   )
 
-  let observer: MutationObserver | null = null;
-  let innerObserver: MutationObserver | null = null
-  let timeoutTrack: ReturnType<typeof setInterval> | null = null;
-
-  function domListener() {
-    let domChangeCount = 0;
-    const callback = function (mutationsList, observer) {
-      clearInterval(timeoutTrack);
-      domChangeCount++;
-      let intervalCount = 0;
-      timeoutTrack = setInterval(() => {
-        intervalCount++;
-        if (intervalCount === 4) {
-          clearInterval(timeoutTrack)
-        }
-        if (isDebugging) {
-          console.log({ domChangeCount, intervalCount, isNewArticleDetected });
-        }
-        domChangeCount = 0;
-        if (intervalCount == 1) {
-          setPreference(preference, trackArticle)
-        } else if (intervalCount > 1 && !isNewArticleDetected) {
-          detectToc()
-        }
-      }, 300);
-    }
-    if (observer === null) {
-      observer = new MutationObserver(callback)
-    }
-    else {
-      observer.disconnect()
+  const applyFeaturesForCurrentSite = (items) => {
+    const allowlist = mergeDefaultSiteAllowlist(items.siteAllowlist || DEFAULT_SITE_ALLOWLIST)
+    const siteAllowed = isHostAllowed(window.location.hostname, allowlist)
+    if (!siteAllowed) {
+      unmountSummaryBall()
+      unmountSelfCiteBall()
+      return
     }
 
-    const config = {
-      attributes: true,
-      attributeOldValue: true,
-      subtree: true,
-      childList: true
+    if (items.aiSummaryEnabled || items.obsidianClipperEnabled) {
+      mountSummaryBall()
+    } else {
+      unmountSummaryBall()
     }
-    observer.observe(document, config)
+
+    if (items.selfCiteEnabled) {
+      mountSelfCiteBall() // no-ops itself when not on a Medium editor page
+    } else {
+      unmountSelfCiteBall()
+    }
   }
 
-  let articleId = ''
-  let articleContentClass = ''
-  let selectorInoreader = '.article_content'
-  let selectorMedium = 'article'
+  const SETTINGS_DEFAULTS = {
+    aiSummaryEnabled: true,
+    obsidianClipperEnabled: true,
+    selfCiteEnabled: true,
+    siteAllowlist: DEFAULT_SITE_ALLOWLIST,
+  }
 
-  chrome.storage.local.get({
-    selectorInoreader: '.article_content',
-    selectorMedium: 'article'
-  }, function (items) {
-    selectorInoreader = items.selectorInoreader
-    selectorMedium = items.selectorMedium
+  chrome.storage.local.get(SETTINGS_DEFAULTS, function (items) {
+    applyFeaturesForCurrentSite(items)
   });
 
-  // Extract article each time DOM changes (Medium page switch, Inoreader subpage switch)
-  function trackArticle() {
-    const articleClass = mediumArticle != null ? selectorMedium : selectorInoreader;
-    const el: HTMLElement = document.querySelector(articleClass) as HTMLElement;
-    let isArticleChanged = (el && (el.id !== articleId || el.className !== articleContentClass)) || !el
-    if (isArticleChanged) {
-      isNewArticleDetected = false
-    hasShownNoArticleToast = false
-      if (isDebugging) {
-        console.log('refresh')
-      }
-      articleId = el ? el.id : ''
-      articleContentClass = el ? el.className : ''
-      if (innerObserver) {
-        innerObserver.disconnect()
-        innerObserver = null
-      }
-      innerObserver = new MutationObserver((mutations, obs) => {
-        const articleLoaded = document.querySelector(articleClass)
-        if (articleLoaded) {
-          start()
-          obs.disconnect()
-          innerObserver = null
-        }
-      })
-      innerObserver.observe(document, { childList: true, subtree: true })
-      if (isMediumCom || isInoReaderCom) {
-        start();
-      }
-    }
-  }
-
-  function detectToc() {
-    const article = extractArticle()
-    const headings = article && extractHeadings(article)
-    if (article && headings && headings.length > 0) {
-      setPreference(preference, () => {
-        renderToc(article, headings)
+  // React to capability toggles from the options page without needing a reload
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+    if (changes.aiSummaryEnabled || changes.obsidianClipperEnabled || changes.selfCiteEnabled || changes.siteAllowlist) {
+      chrome.storage.local.get(SETTINGS_DEFAULTS, function (items) {
+        applyFeaturesForCurrentSite(items)
       });
-      clearInterval(timeoutTrack)
-    }
-  }
-
-  const dm = document.domain
-  const isInoReader =
-    dm.indexOf('inoreader.com') >= 0 || dm.indexOf('innoreader.com') > 0
-  const container = document.getElementById("root") as HTMLElement | null;
-  let mediumArticle = container != null && document.querySelector(selectorMedium) as HTMLElement || null
-  let isMediumComPrefix = dm.indexOf('medium.com') >= 0;
-  let isMediumCom = dm === 'medium.com'
-  let isInoReaderCom = dm === 'inoreader.com' || dm === 'innoreader.com';
-  let isMediumOrInoreader = isInoReader || isMediumComPrefix || mediumArticle !== null;
-
-  chrome.storage.local.get({
-    autoType: '2'
-  }, function (items) {
-    if (items.autoType !== '0') {
-      let isAutoLoad = items.autoType === '1';
-      if (items.autoType === '2') {
-        isAutoLoad = isMediumOrInoreader;
-      }
-      if (isAutoLoad) {
-        load();
-      }
     }
   });
 
-  function load() {
-    chrome.runtime.sendMessage("load")
-    isLoad = true
-    setPreference(preference, start);
-    domListener()
-  }
-
-  function unload() {
-    chrome.runtime.sendMessage("unload")
-    isLoad = false
-    if (toc) {
-      toc.dispose()
-    }
-    if (observer !== null) {
-      observer.disconnect()
-      observer = null
-    }
-    if (innerObserver) {
-      innerObserver.disconnect()
-      innerObserver = null
-    }
-    if (retryTimer) {
-      clearTimeout(retryTimer)
-      retryTimer = null
-    }
-  }
+  // Medium is a client-side-routed SPA — this content script only runs once
+  // at document_end, so re-check the self-cite button's editor-page condition
+  // whenever the URL changes (e.g. navigating from a draft list into /edit).
+  let lastPath = window.location.pathname
+  window.setInterval(() => {
+    if (window.location.pathname === lastPath) return
+    lastPath = window.location.pathname
+    chrome.storage.local.get(SETTINGS_DEFAULTS, function (items) {
+      applyFeaturesForCurrentSite(items)
+    });
+  }, 1000)
 }

@@ -1,6 +1,5 @@
 import { isDebugging } from '../util/env'
 import { draw } from '../util/debug'
-import { type Heading } from '../types'
 import { toArray } from '../util/dom/to_array'
 import { canScroll } from './scroll'
 
@@ -175,126 +174,34 @@ export const extractArticle = function (): HTMLElement | undefined {
   return article
 }
 
-const HEADING_TAG_WEIGHTS = {
-  H1: 4,
-  H2: 9,
-  H3: 9,
-  H4: 10,
-  H5: 10,
-  H6: 10,
+const AI_NOISE_SELECTORS = [
+  'footer',
+  'aside',
+  'nav',
+  'form',
+  'button',
+  'textarea',
+  'input',
+  '[role="dialog"]',
+  '[aria-label*="comment" i]',
+  '[aria-label*="response" i]',
+  '[data-testid*="comment" i]',
+  '[data-testid*="response" i]',
+  '[id*="comment" i]',
+  '[class*="comment" i]',
+  '[class*="response" i]',
+  '[class*="reply" i]',
+  '#__me_summary_ball__',
+  '#__me_ai_menu__',
+  '#__me_summary_panel__',
+].join(', ')
+
+export const extractArticleTextForAI = (articleDom: HTMLElement | undefined): string => {
+  if (!articleDom) return ''
+  const cloned = articleDom.cloneNode(true) as HTMLElement
+  try {
+    cloned.querySelectorAll(AI_NOISE_SELECTORS).forEach((node) => node.remove())
+  } catch {}
+  return (cloned.innerText || '').trim()
 }
-export const extractHeadings = (articleDom: HTMLElement): Heading[] => {
-  const isVisible = (elem: HTMLElement) => elem.offsetHeight !== 0
-  const container = document.getElementById("root") as HTMLElement | null;
-  let mediumArticle = container != null && document.querySelector('article') as HTMLElement || null
 
-  type HeadingGroup = {
-    tag: string
-    elems: HTMLElement[]
-    score: number
-  }
-
-  const isHeadingGroupVisible = (group: HeadingGroup) => {
-    return group.elems.filter(isVisible).length >= group.elems.length * 0.5
-  }
-
-  if (isDebugging) console.log('[extract] extractHeadings called, articleDom:', articleDom?.tagName, articleDom?.className?.slice(0, 60))
-
-  const headingTagGroups: HeadingGroup[] = Object.keys(HEADING_TAG_WEIGHTS)
-    .map(
-      (tag): HeadingGroup => {
-        let elems = toArray(
-          articleDom.getElementsByTagName(tag),
-        ) as HTMLElement[]
-        if (tag.toLowerCase() === 'strong') {
-          // for <strong> elements, only take them as heading when they align at left
-          const commonLeft = getElemsCommonLeft(elems)
-          if (commonLeft === undefined || commonLeft > articleDom.getBoundingClientRect().left + 100) {
-            elems = []
-          } else {
-            elems = elems.filter(
-              (elem) => elem.getBoundingClientRect().left === commonLeft,
-            )
-          }
-        }
-        // for medium. filter out headings in flex container or with previous sibling div that is flex
-        if (mediumArticle && (tag.toLowerCase() === 'h2' || tag.toLowerCase() === 'h3')) {
-          const beforeFilter = elems.length
-          elems = elems.filter(
-            (elem) => {
-              // Headings inside <a> tags are related-article card headings, not real article headings
-              if (elem.closest('a') !== null) {
-                if (isDebugging) console.log('[extract] filtered (inside <a>):', elem.textContent)
-                return false;
-              }
-
-              const parent = elem.parentElement;
-              const isParentFlex = parent && parent.tagName.toLowerCase() === 'div' && getComputedStyle(parent).display === 'flex';
-
-              if (isParentFlex && isDebugging) {
-                console.log('[extract] filtered (flex):', elem.textContent, { isParentFlex })
-              }
-              return !isParentFlex;
-            }
-          )
-          if (isDebugging) console.log(`[extract] ${tag}: ${beforeFilter} → ${elems.length} after filter`)
-        }
-        return {
-          tag,
-          elems,
-          score: elems.length * HEADING_TAG_WEIGHTS[tag],
-        }
-      },
-    )
-    .filter((group) => {
-      const pass = group.score >= 10 && group.elems.length > 0
-      if (isDebugging) console.log(`[extract] group ${group.tag}: elems=${group.elems.length} score=${group.score} pass=${pass}`)
-      return pass
-    })
-    .filter((group) => isHeadingGroupVisible(group))
-    .slice(0, 3)
-
-  // use document sequence
-  const headingTags = headingTagGroups.map((headings) => headings.tag)
-  const acceptNode = (node: HTMLElement) => {
-    const group = headingTagGroups.find((g) => g.tag === node.tagName)
-    if (!group) {
-      return NodeFilter.FILTER_SKIP
-    }
-    return group.elems.includes(node) && isVisible(node)
-      ? NodeFilter.FILTER_ACCEPT
-      : NodeFilter.FILTER_SKIP
-  }
-  const treeWalker = document.createTreeWalker(
-    articleDom,
-    NodeFilter.SHOW_ELEMENT,
-    { acceptNode },
-  )
-  const headings: Heading[] = []
-  let id = 0
-  while (treeWalker.nextNode()) {
-    const dom = treeWalker.currentNode as HTMLElement
-    const anchor =
-      dom.id ||
-      toArray(dom.querySelectorAll('a'))
-        .map((a) => {
-          let href = a.getAttribute('href') || ''
-          return href.startsWith('#') ? href.substr(1) : a.id
-        })
-        .filter(Boolean)[0]
-    headings.push({
-      dom,
-      text: dom.textContent || '',
-      level: headingTags.indexOf(dom.tagName) + 1,
-      id,
-      anchor,
-    })
-    id++
-  }
-  if (isDebugging) {
-    if (headingTagGroups.length > 0) draw(headingTagGroups[0].elems, 'blue')
-    if (headingTagGroups.length > 1) draw(headingTagGroups[1].elems, 'green')
-    if (headingTagGroups.length > 2) draw(headingTagGroups[2].elems, 'yellow')
-  }
-  return headings
-}
