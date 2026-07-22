@@ -2,13 +2,20 @@
 // editor page. Lists the author's own past posts — ranked by topical
 // relevance to the draft being written (revenue only breaks ties, per
 // user feedback 2026-07-22: pure revenue ranking surfaced unrelated posts) —
-// and can either copy a bare URL (paste on its own line -> Medium mixtape
-// card) or generate a one-sentence "why read this" recommendation via the
-// same local Ollama / cloud AI already wired for summarize.
+// and copies a bare URL (paste on its own line -> Medium mixtape card).
+//
+// An earlier version also offered an "AI 推荐语" button that asked the local
+// AI provider to invent a one-sentence "why read this" recommendation from
+// just the two titles. Dropped 2026-07-22: with no real article content to
+// work from, the model fabricated plausible-sounding but false connections
+// between unrelated pieces — a real instance of the fabrication risk this
+// whole project treats as a hard line elsewhere. Writing that sentence by
+// hand (you already know what both pieces say) is more reliable than trying
+// to prompt-engineer around a problem that's fundamentally an information
+// shortage, not a wording problem.
 
 import {
   fetchTopEarners,
-  generateTeaser,
   getCurrentDraftTitle,
   isMediumEditorPage,
   scoreRelevance,
@@ -71,7 +78,9 @@ const CSS = `
 #${PANEL_ID} .me-sc-item {
   padding: 10px 14px;
   border-bottom: 1px solid #f2f2f2;
+  cursor: pointer;
 }
+#${PANEL_ID} .me-sc-item:hover { background: #f7f7f7; }
 #${PANEL_ID} .me-sc-title {
   font-size: 13px;
   color: #1a1a1a;
@@ -94,26 +103,6 @@ const CSS = `
 #${PANEL_ID} .me-sc-relevance.high { background: #d7f3df; color: #0f6b2c; }
 #${PANEL_ID} .me-sc-relevance.mid { background: #fdecc8; color: #8a5a00; }
 #${PANEL_ID} .me-sc-relevance.low { background: #eeeeee; color: #757575; }
-#${PANEL_ID} .me-sc-actions {
-  display: flex;
-  gap: 8px;
-}
-#${PANEL_ID} .me-sc-btn {
-  font-size: 11px;
-  padding: 4px 8px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  background: #fafafa;
-  cursor: pointer;
-  color: #1a1a1a;
-}
-#${PANEL_ID} .me-sc-btn:hover { background: #f0f0f0; }
-#${PANEL_ID} .me-sc-btn:disabled { opacity: 0.5; cursor: default; }
-#${PANEL_ID} .me-sc-status {
-  font-size: 11px;
-  color: #757575;
-  margin-top: 4px;
-}
 #${PANEL_ID} .me-sc-empty {
   padding: 20px 14px;
   font-size: 12px;
@@ -217,47 +206,9 @@ const renderPanel = (
       meta.appendChild(document.createTextNode(`${pub}$${p.revenueUsd.toFixed(2)}`))
       item.appendChild(meta)
 
-      const actions = document.createElement('div')
-      actions.className = 'me-sc-actions'
-
-      const copyLinkBtn = document.createElement('button')
-      copyLinkBtn.className = 'me-sc-btn'
-      copyLinkBtn.type = 'button'
-      copyLinkBtn.textContent = '复制链接'
-      copyLinkBtn.addEventListener('click', () => {
+      item.addEventListener('click', () => {
         copyText(p.url, '链接已复制，粘贴到正文单独一行会自动生成卡片')
         closePanel()
-      })
-      actions.appendChild(copyLinkBtn)
-
-      const aiBtn = document.createElement('button')
-      aiBtn.className = 'me-sc-btn'
-      aiBtn.type = 'button'
-      aiBtn.textContent = 'AI 推荐语 + 链接'
-      actions.appendChild(aiBtn)
-
-      item.appendChild(actions)
-
-      const status = document.createElement('div')
-      status.className = 'me-sc-status'
-      status.style.display = 'none'
-      item.appendChild(status)
-
-      aiBtn.addEventListener('click', async () => {
-        aiBtn.disabled = true
-        copyLinkBtn.disabled = true
-        status.style.display = 'block'
-        status.textContent = '生成中…'
-        try {
-          const teaser = await generateTeaser(draftTitle, p.title)
-          const combined = `${teaser}\n\n${p.url}`
-          await copyText(combined, '推荐语 + 链接已复制')
-          closePanel()
-        } catch (e) {
-          status.textContent = `生成失败：${(e as Error).message}`
-          aiBtn.disabled = false
-          copyLinkBtn.disabled = false
-        }
       })
 
       el.appendChild(item)

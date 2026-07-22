@@ -44,14 +44,20 @@ export const isMediumEditorPage = (): boolean => {
 
 // Best-effort read of the draft title straight out of the editor's contenteditable
 // title field. Medium's DOM has shifted selectors before, so this tries a few
-// fallbacks and returns '' (not a hard error) if none match — callers should
-// degrade to revenue-only sorting rather than fail outright.
+// fallbacks, then falls back to the tab title, then gives up ('' — callers must
+// degrade to revenue-only sorting and say so visibly, not silently).
 const TITLE_SELECTORS = [
   '[data-testid="editorTitleParagraph"]',
   'article [data-testid*="title" i][contenteditable]',
   'h1[contenteditable], h3[contenteditable]',
   '.graf--title',
+  // Broader fallback: the first contenteditable element inside the editor's
+  // article root is very likely the title field even if its testid changed.
+  'article [contenteditable]:first-of-type',
 ]
+
+const stripTabTitleSuffix = (t: string): string =>
+  t.replace(/\s*[–—-]\s*(Medium|Draft)\s*$/i, '').trim()
 
 export const getCurrentDraftTitle = (): string => {
   for (const sel of TITLE_SELECTORS) {
@@ -59,6 +65,10 @@ export const getCurrentDraftTitle = (): string => {
     const text = el?.textContent?.trim()
     if (text) return text
   }
+  // Medium keeps the tab title in sync with the draft title while editing,
+  // usually as "<title> - Medium" or similar — strip that suffix if present.
+  const tabTitle = stripTabTitleSuffix(document.title || '')
+  if (tabTitle && tabTitle.toLowerCase() !== 'medium') return tabTitle
   return ''
 }
 
@@ -138,82 +148,4 @@ export const fetchTopEarners = async (username: string, limit = 5): Promise<Self
   posts.sort((a, b) => b.revenueUsd - a.revenueUsd)
   cache = { username, posts, fetchedAt: Date.now() }
   return posts.slice(0, limit)
-}
-
-// Ask the same local Ollama / cloud (BYOK) provider already wired for AI summarize
-// (see options.tsx "AI Provider") for one short "why read this" sentence, so
-// self-citing doesn't leave the user to write that transition line by hand.
-// Reuses background.ts's existing generic 'summarize' port protocol — no
-// background.ts changes needed, it already accepts any {instruction,title,text}.
-export const generateTeaser = (draftTitle: string, candidateTitle: string): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.get(
-      {
-        ollamaBaseUrl: 'http://localhost:11434',
-        ollamaModel: '',
-        aiProvider: 'ollama',
-        aiApiKey: '',
-        aiCloudModel: '',
-      },
-      (cfg) => {
-        const provider = cfg.aiProvider === 'openai' || cfg.aiProvider === 'anthropic' ? cfg.aiProvider : 'ollama'
-        const model = provider === 'ollama' ? cfg.ollamaModel : cfg.aiCloudModel
-        if (!model) {
-          reject(new Error(provider === 'ollama' ? 'No Ollama model selected in Options.' : `No ${provider} model configured in Options.`))
-          return
-        }
-        if (provider !== 'ollama' && !cfg.aiApiKey) {
-          reject(new Error(`No ${provider} API key configured in Options.`))
-          return
-        }
-
-        const instruction =
-          'You are helping a writer add a "further reading" recommendation for their own past article ' +
-          'at the end of a new draft. Write exactly ONE short sentence (under 25 words) recommending the ' +
-          'reader check out that past article, in the SAME language as the draft title below. ' +
-          'Output ONLY that one sentence — no quotes, no labels, no extra commentary.'
-
-        let accumulated = ''
-        let settled = false
-        const port = chrome.runtime.connect({ name: 'summarize' })
-        const timeout = window.setTimeout(() => {
-          if (settled) return
-          settled = true
-          try { port.disconnect() } catch {}
-          reject(new Error('Timed out waiting for a response.'))
-        }, 30000)
-
-        port.onMessage.addListener((msg: any) => {
-          if (msg.type === 'chunk') {
-            accumulated += msg.chunk
-          } else if (msg.type === 'done') {
-            if (settled) return
-            settled = true
-            window.clearTimeout(timeout)
-            resolve(accumulated.trim().replace(/^["“]|["”]$/g, ''))
-          } else if (msg.type === 'error') {
-            if (settled) return
-            settled = true
-            window.clearTimeout(timeout)
-            reject(new Error(msg.error || 'AI request failed'))
-          }
-        })
-        port.onDisconnect.addListener(() => {
-          if (settled) return
-          settled = true
-          window.clearTimeout(timeout)
-          reject(new Error('Connection closed before a response arrived.'))
-        })
-        port.postMessage({
-          instruction,
-          title: draftTitle || '(untitled draft)',
-          text: candidateTitle,
-          baseUrl: cfg.ollamaBaseUrl || 'http://localhost:11434',
-          model,
-          provider,
-          apiKey: cfg.aiApiKey,
-        })
-      },
-    )
-  })
 }
