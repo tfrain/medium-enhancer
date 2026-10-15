@@ -64,6 +64,63 @@ body {
   padding: 8px 0;
 }
 
+.clip-error {
+  color: #d84a4a;
+}
+
+/* Convert Page to Markdown button */
+.clip-markdown-btn {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.clip-markdown-btn:hover {
+  opacity: 0.92;
+}
+
+.clip-markdown-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.earnings-sync {
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.earnings-sync-heading {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.earnings-sync-copy,
+.earnings-sync-status {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.earnings-sync-status {
+  color: var(--accent);
+}
+
+.earnings-sync-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* Feed card */
 .feed-card {
   background: var(--bg-card);

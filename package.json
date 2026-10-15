@@ -1,7 +1,7 @@
 {
   "name": "medium-enhancer",
   "displayName": "Medium Enhancer",
-  "version": "0.5.2",
+  "version": "0.6.7",
   "description": "AI summaries (local Ollama or your own OpenAI/Anthropic key), one-click Markdown/Obsidian export, and RSS discovery for any long-form article.",
   "author": "Wesley Wei",
   "scripts": {
@@ -44,7 +44,8 @@
       "scripting",
       "declarativeNetRequest",
       "activeTab",
-      "clipboardWrite"
+      "clipboardWrite",
+      "downloads"
     ],
     "author": "cwei3790@gmail.com"
   }

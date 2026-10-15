@@ -5,6 +5,8 @@ import { mountSummaryBall, unmountSummaryBall } from './summary-ball'
 import { showAiPanel } from './summary-panel'
 import { mountSelfCiteBall, unmountSelfCiteBall } from './self-cite-panel'
 import { DEFAULT_SITE_ALLOWLIST, isHostAllowed, mergeDefaultSiteAllowlist } from '../shared/site-access'
+import { clipCurrentMediumArticleAsMarkdown } from './markdown/medium-to-markdown'
+import { getStorage, OBSIDIAN_SETTINGS_DEFAULTS, sendClipToObsidian } from '../shared/obsidian-clip'
 import type { PlasmoCSConfig } from "plasmo"
 
 export const config: PlasmoCSConfig = {
@@ -33,6 +35,32 @@ if (window === getContentWindow()) {
         } catch (e) {
           sendResponse({ ok: false, error: (e as Error).message })
         }
+      }
+
+      // Explicit-click-only: fired by the "Convert Page to Markdown" context
+      // menu item or popup button. Works on any site — deliberately NOT
+      // gated by the feature site-allowlist below, and never runs on its own.
+      // Mirrors the existing "Clip to Obsidian" AI-ball button: when the
+      // Obsidian Clipper is enabled it goes to the same configured vault
+      // folder (default "clippers"); otherwise it falls back to a plain
+      // file download.
+      if (typeof request === 'object' && request?.type === 'clipPageAsMarkdown') {
+        (async () => {
+          try {
+            const clip = clipCurrentMediumArticleAsMarkdown()
+            const settings = await getStorage(OBSIDIAN_SETTINGS_DEFAULTS)
+            if (settings.obsidianClipperEnabled) {
+              const result = await sendClipToObsidian(clip)
+              if (!result.ok) throw new Error(result.error)
+              sendResponse({ ok: true, mode: 'obsidian', filepath: result.filepath })
+            } else {
+              sendResponse({ ok: true, mode: 'download', markdown: clip.markdown, title: clip.title })
+            }
+          } catch (e) {
+            sendResponse({ ok: false, error: (e as Error).message })
+          }
+        })()
+        return true
       }
     },
   )
