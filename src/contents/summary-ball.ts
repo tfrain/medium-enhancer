@@ -1,4 +1,4 @@
-// Floating action button ("悬浮球") that opens the AI action menu on click.
+// Floating action button that opens the AI action menu on click.
 // Mounted unconditionally on all pages when aiSummaryEnabled is true.
 
 import { hideAiMenu, isAiMenuOpen, showAiMenu } from './ai-menu'

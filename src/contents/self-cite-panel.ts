@@ -4,7 +4,7 @@
 // user feedback 2026-07-22: pure revenue ranking surfaced unrelated posts) —
 // and copies a bare URL (paste on its own line -> Medium mixtape card).
 //
-// An earlier version also offered an "AI 推荐语" button that asked the local
+// An earlier version also offered an "AI recommendation" button that asked the local
 // AI provider to invent a one-sentence "why read this" recommendation from
 // just the two titles. Dropped 2026-07-22: with no real article content to
 // work from, the model fabricated plausible-sounding but false connections
@@ -149,7 +149,7 @@ const copyText = async (text: string, successMsg: string) => {
     await navigator.clipboard.writeText(text)
     showToast(successMsg)
   } catch {
-    showToast('复制失败，请手动复制')
+    showToast('Copy failed. Please copy it manually.')
   }
 }
 
@@ -165,14 +165,14 @@ const renderPanel = (
 
   const header = document.createElement('div')
   header.className = 'me-sc-header'
-  header.textContent = `@${username} 的过往文章（按相关度排序，收益仅作同等相关度下的次要排序）`
+  header.textContent = `@${username}'s past stories (sorted by relevance; earnings only break ties)`
   el.appendChild(header)
 
   const sub = document.createElement('div')
   sub.className = 'me-sc-sub'
   sub.textContent = draftTitle
-    ? `当前草稿标题：${draftTitle}`
-    : '未读取到草稿标题，本次只按收益排序'
+    ? `Current draft title: ${draftTitle}`
+    : 'Could not read the draft title, so stories are sorted by earnings only.'
   el.appendChild(sub)
 
   const bestScore = posts && posts.length ? posts[0].relevance : -1
@@ -180,12 +180,12 @@ const renderPanel = (
   if (error) {
     const empty = document.createElement('div')
     empty.className = 'me-sc-empty'
-    empty.textContent = `拉取失败：${error}`
+    empty.textContent = `Could not load stories: ${error}`
     el.appendChild(empty)
   } else if (!posts) {
     const empty = document.createElement('div')
     empty.className = 'me-sc-empty'
-    empty.textContent = '加载中…'
+    empty.textContent = 'Loading...'
     el.appendChild(empty)
   } else if (draftTitle && bestScore === 0) {
     // No candidate shares any real title vocabulary with the draft — showing
@@ -195,14 +195,14 @@ const renderPanel = (
     // workflow, no good match means skip the citation, not settle for one.
     const empty = document.createElement('div')
     empty.className = 'me-sc-empty'
-    empty.textContent = '没有找到主题相关的旧文章，这次不建议做自引用。'
+    empty.textContent = 'No related past stories found. Better not to self-cite this time.'
     el.appendChild(empty)
   } else {
     if (draftTitle && bestScore >= 0 && bestScore < 0.34) {
       const warn = document.createElement('div')
       warn.className = 'me-sc-empty'
       warn.style.color = '#8a5a00'
-      warn.textContent = '相关度都不高，请自行判断是否值得引用，而不是照单推荐。'
+      warn.textContent = 'None of these is a strong match. Judge for yourself whether one is worth linking.'
       el.appendChild(warn)
     }
     for (const p of posts) {
@@ -219,14 +219,14 @@ const renderPanel = (
       const band = relevanceBand(p.relevance)
       const badge = document.createElement('span')
       badge.className = `me-sc-relevance ${band}`
-      badge.textContent = band === 'high' ? '相关度高' : band === 'mid' ? '相关度中' : '相关度低'
+      badge.textContent = band === 'high' ? 'High match' : band === 'mid' ? 'Medium match' : 'Low match'
       meta.appendChild(badge)
       const pub = p.publication ? `${p.publication} · ` : ''
       meta.appendChild(document.createTextNode(`${pub}$${p.revenueUsd.toFixed(2)}`))
       item.appendChild(meta)
 
       item.addEventListener('click', () => {
-        copyText(p.url, '链接已复制，粘贴到正文单独一行会自动生成卡片')
+        copyText(p.url, 'Link copied. Paste it on its own line to make a card.')
         closePanel()
       })
 
@@ -282,8 +282,8 @@ export const mountSelfCiteBall = () => {
 
   const el = document.createElement('div')
   el.id = BALL_ID
-  el.textContent = '🔗 自引用'
-  el.title = '插入你自己过去表现最好的一篇文章链接'
+  el.textContent = '🔗 Cite my story'
+  el.title = 'Link one of your own best-performing past stories'
   el.addEventListener('click', openPanel)
 
   document.body.appendChild(el)

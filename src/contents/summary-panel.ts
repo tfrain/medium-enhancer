@@ -1,10 +1,10 @@
 // In-page floating panel that streams an AI response from the background worker.
-// Used for summary, comment, and any custom user prompt.
+// Used for the summary, comment explanations, and any custom user prompt.
 //
-// The body is split into two columns: the primary (English) AI response on the
-// left, and a Chinese translation of that response on the right. The Chinese
-// column is filled by firing a second Ollama request once the primary response
-// completes, asking the model to translate the accumulated text.
+// The AI response fills the main column. If the user picked a translation
+// language in Options (off by default), a second column is added and filled by
+// a second request once the main response completes, asking the model to
+// translate the accumulated text.
 
 const PANEL_ID = '__me_summary_panel__'
 
@@ -222,7 +222,7 @@ const buildPanel = (headline: string, translationLanguage: string): PanelRefs =>
 
   let translation: { col: HTMLDivElement; content: HTMLDivElement } | null = null
   if (translationLanguage) {
-    translation = makeCol(labelForLanguage(translationLanguage), `等待英文结果后翻译…`)
+    translation = makeCol(labelForLanguage(translationLanguage), 'Waiting for the English result before translating...')
     body.appendChild(translation.col)
   } else {
     // Single-column layout — let English fill the width.
@@ -374,13 +374,13 @@ export const showAiPanel = (req: AiPanelRequest) => {
     {
       ollamaBaseUrl: 'http://localhost:11434',
       ollamaModel: '',
-      translationLanguage: 'Simplified Chinese',
+      translationLanguage: '',   // off unless the user picks a language in Options
       aiProvider: 'ollama',
       aiApiKey: '',
       aiCloudModel: '',
     },
     async (cfgRaw) => {
-      const translationLanguage: string = cfgRaw.translationLanguage ?? 'Simplified Chinese'
+      const translationLanguage: string = cfgRaw.translationLanguage ?? ''
       current = buildPanel(req.headline, translationLanguage)
       const panel = current
       let runId = 0
@@ -394,7 +394,7 @@ export const showAiPanel = (req: AiPanelRequest) => {
         panel.bodyEn.textContent = 'Waiting for response…'
         if (panel.bodyTranslation) {
           panel.bodyTranslation.classList.add('me-sum-pending')
-          panel.bodyTranslation.textContent = '等待英文结果后翻译…'
+          panel.bodyTranslation.textContent = 'Waiting for the English result before translating...'
         }
       }
 
@@ -471,7 +471,7 @@ export const showAiPanel = (req: AiPanelRequest) => {
           }
 
           setStatus(`Translating to ${labelForLanguage(translationLanguage)}…`)
-          panel.bodyTranslation.textContent = '翻译中…'
+          panel.bodyTranslation.textContent = 'Translating...'
           try {
             await streamInto(
               panel.bodyTranslation,

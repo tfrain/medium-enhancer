@@ -34,7 +34,7 @@ const DEFAULT_CLOUD_MODEL: Record<Exclude<AiProvider, "ollama">, string> = {
 	openai: "gpt-4o-mini",
 	anthropic: "claude-haiku-4-5",
 };
-const DEFAULT_TRANSLATION_LANGUAGE = "Simplified Chinese";
+const DEFAULT_TRANSLATION_LANGUAGE = "";   // off by default: the audience reads English
 const DEFAULT_OBSIDIAN_FOLDER = "clippers";
 const DEFAULT_OBSIDIAN_PATH_TEMPLATE = "clippers/{title}.md";
 const DEFAULT_SITE_ALLOWLIST_TEXT = serializeSiteAllowlist(DEFAULT_SITE_ALLOWLIST);
