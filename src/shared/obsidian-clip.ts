@@ -1,7 +1,6 @@
-// Shared between ai-menu.ts (Medium-only "Clip to Obsidian" button) and
-// contents/index.ts (any-site "Convert Page to Markdown" trigger) — both
-// route a clipped article through the same Obsidian vault settings so a
-// click always lands in the same configured folder (default "clippers").
+// Used by contents/index.ts for "Convert Page to Markdown": with "Save to
+// Obsidian" on, the clipped article goes to the configured vault folder
+// (default "clippers").
 
 export type ClipForObsidian = {
   title: string

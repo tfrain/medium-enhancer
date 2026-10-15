@@ -1,31 +1,17 @@
 import { AI_PRESETS } from './ui/ai-presets'
 import { extractArticle, extractArticleTextForAI } from './lib/extract'
 import { getContentWindow } from './lib/iframe'
-import { mountSummaryBall, unmountSummaryBall } from './ui/summary-ball'
 import { showAiPanel } from './ui/summary-panel'
 import { mountSelfCiteBall, unmountSelfCiteBall } from './ui/self-cite-panel'
-import { DEFAULT_SITE_ALLOWLIST, isHostAllowed, mergeDefaultSiteAllowlist } from '../shared/site-access'
 import { clipCurrentMediumArticleAsMarkdown } from './markdown/medium-to-markdown'
 import { getStorage, OBSIDIAN_SETTINGS_DEFAULTS, sendClipToObsidian } from '../shared/obsidian-clip'
 import type { PlasmoCSConfig } from "plasmo"
 
-// Registered up front only for the default site allowlist (keep in sync with
-// DEFAULT_SITE_ALLOWLIST; Plasmo needs a literal here). Sites the user adds are
-// registered at runtime by the background worker, and on any other page the
-// script is injected when the user clicks the menu, shortcut or popup button
-// (see shared/injection.ts). A "*." pattern also matches the bare domain.
+// Runs on its own only on Medium, for the Cite My Story button in the editor.
+// Everywhere else (summary, Markdown export) it is injected when the user
+// clicks the menu, shortcut or popup button (see shared/injection.ts).
 export const config: PlasmoCSConfig = {
-  matches: [
-    "https://*.medium.com/*",
-    "https://*.inoreader.com/*",
-    "https://*.innoreader.com/*",
-    "https://*.itnext.io/*",
-    "https://*.uxdesign.cc/*",
-    "https://*.gopubby.com/*",
-    "https://*.towardsai.net/*",
-    "https://*.bettermarketing.pub/*",
-    "https://*.writingcooperative.com/*"
-  ],
+  matches: ["https://*.medium.com/*"],
   run_at: "document_end",
 }
 
@@ -59,12 +45,9 @@ if (window === getContentWindow() && !alreadyLoaded) {
       }
 
       // Explicit-click-only: fired by the "Convert Page to Markdown" context
-      // menu item or popup button. Works on any site — deliberately NOT
-      // gated by the feature site-allowlist below, and never runs on its own.
-      // Mirrors the existing "Clip to Obsidian" AI-ball button: when the
-      // Obsidian Clipper is enabled it goes to the same configured vault
-      // folder (default "clippers"); otherwise it falls back to a plain
-      // file download.
+      // menu item or the popup button, never on its own. With "Save to
+      // Obsidian" on it goes to the configured vault folder (default
+      // "clippers"); otherwise the background saves a .md file.
       if (typeof request === 'object' && request?.type === 'clipPageAsMarkdown') {
         (async () => {
           try {
@@ -87,20 +70,6 @@ if (window === getContentWindow() && !alreadyLoaded) {
   )
 
   const applyFeaturesForCurrentSite = (items) => {
-    const allowlist = mergeDefaultSiteAllowlist(items.siteAllowlist || DEFAULT_SITE_ALLOWLIST)
-    const siteAllowed = isHostAllowed(window.location.hostname, allowlist)
-    if (!siteAllowed) {
-      unmountSummaryBall()
-      unmountSelfCiteBall()
-      return
-    }
-
-    if (items.aiSummaryEnabled || items.obsidianClipperEnabled) {
-      mountSummaryBall()
-    } else {
-      unmountSummaryBall()
-    }
-
     if (items.selfCiteEnabled) {
       mountSelfCiteBall() // no-ops itself when not on a Medium editor page
     } else {
@@ -109,10 +78,7 @@ if (window === getContentWindow() && !alreadyLoaded) {
   }
 
   const SETTINGS_DEFAULTS = {
-    aiSummaryEnabled: true,
-    obsidianClipperEnabled: true,
     selfCiteEnabled: true,
-    siteAllowlist: DEFAULT_SITE_ALLOWLIST,
   }
 
   chrome.storage.local.get(SETTINGS_DEFAULTS, function (items) {
@@ -122,7 +88,7 @@ if (window === getContentWindow() && !alreadyLoaded) {
   // React to capability toggles from the options page without needing a reload
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
-    if (changes.aiSummaryEnabled || changes.obsidianClipperEnabled || changes.selfCiteEnabled || changes.siteAllowlist) {
+    if (changes.selfCiteEnabled) {
       chrome.storage.local.get(SETTINGS_DEFAULTS, function (items) {
         applyFeaturesForCurrentSite(items)
       });

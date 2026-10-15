@@ -1,19 +1,17 @@
 # Medium Enhancer
 
 ## Introduction
-Medium Enhancer is a browser extension that turns any long-form article page into a faster, more useful reading and clipping tool — AI summaries, one-click export, and RSS discovery, all without leaving the page. It's not limited to Medium: enable it for any site via the configurable site allowlist in Options.
+Medium Enhancer is a browser extension that turns any long-form article page into a faster, more useful reading and clipping tool — AI summaries, one-click export, and RSS discovery, all without leaving the page. It's not limited to Medium: the summary and export work on any article page from the right-click menu.
 
 ## Features
-- **AI Summary**: Summarize the current article, or explain a specific reader comment, from the right-click menu or a floating button. Works with a local [Ollama](https://ollama.com) model (free, fully private, runs on your machine) or your own OpenAI / Anthropic API key (no local install needed — your key is stored only in your browser and talks directly to the provider).
-- **Markdown Export**: Turn the current article into clean Markdown from the right-click AI menu.
-- **Obsidian Clipper**: Send the current article straight into your Obsidian vault via the Advanced Obsidian URI plugin — one click, no copy-paste.
-- **RSS Feed Discovery**: Find and subscribe to RSS feeds for Medium articles, authors, and publications.
+- **AI Summary**: Right-click any page and choose "Summarize with AI", or press `Ctrl/Cmd+Shift+S`. Works with a local [Ollama](https://ollama.com) model (free, private, runs on your machine) or your own OpenAI / Anthropic API key (stored only in your browser, sent only to that provider). Optional translation of the result.
+- **Markdown Export**: Right-click → "Convert Page to Markdown", or use the popup button. Downloads a `.md` file, or sends it straight to your Obsidian vault (needs the Advanced Obsidian URI plugin).
+- **RSS Feed Discovery**: Click the extension icon on a Medium article to find the author's and publication's RSS feeds.
 - **Cite My Story** (for Medium writers): While editing a draft, list your own past stories ranked by relevance to the draft title, and copy a link that Medium turns into an embed card.
-- **Keyboard Shortcut**: Trigger AI summarize with `Ctrl/Cmd+Shift+S` — remappable at `chrome://extensions/shortcuts`.
 
 ## Permissions
-- Runs automatically only on Medium and its publications (and Inoreader). On any other page it runs only when you click the menu, press the shortcut, or use the popup.
-- Sites you add in Options are asked for when you save them.
+- Runs on its own only in the Medium editor (Cite My Story). On any other page it runs only when you click the menu, press the shortcut, or use the popup.
+- A remote Ollama server (not on your computer) is asked for when you save its address.
 - Network requests go only to the page you are on, your Ollama server, or the AI provider you chose.
 
 ## Privacy
@@ -28,10 +26,10 @@ See [PRIVACY.md](PRIVACY.md). In short: nothing is collected by the developer. I
    ```
 
 ## Usage
-- **Summarize with AI**: Right-click anywhere on the page → "Summarize with AI," or press `Ctrl/Cmd+Shift+S`.
-- **Configure AI Provider**: Open the extension Options → AI Provider, and pick Ollama (local) or paste an OpenAI/Anthropic API key.
-- **Export to Markdown / Obsidian**: Right-click → the AI menu has both "Copy as Markdown" and "Send to Obsidian" (the latter needs the Obsidian toggle + the Advanced Obsidian URI community plugin installed in Obsidian).
-- **Find RSS Feeds**: Click the extension icon on a supported page to see available feeds.
+- **Summarize**: right-click → "Summarize with AI", or `Ctrl/Cmd+Shift+S` (change it at `chrome://extensions/shortcuts`).
+- **Choose an AI provider**: Options → AI: Ollama (local), or paste an OpenAI / Anthropic key.
+- **Export**: right-click → "Convert Page to Markdown". Turn on "Save to Obsidian" in Options to send it to your vault instead.
+- **RSS**: click the extension icon on a Medium article.
 
 ## Development
 ```

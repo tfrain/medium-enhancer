@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
-import './css/chrome_shared.css';
-import { DEFAULT_SITE_ALLOWLIST, extraAllowlistPatterns, mergeDefaultSiteAllowlist, ollamaPermissionPattern, parseSiteAllowlist, serializeSiteAllowlist } from "./shared/site-access";
+import './options.css';
+import iconUrl from "data-base64:../assets/icon.png";
+import { ollamaPermissionPattern } from "./shared/site-access";
 
 type Capability = {
 	key: string;
@@ -12,17 +13,22 @@ const CAPABILITIES: Capability[] = [
 	{
 		key: "aiSummaryEnabled",
 		label: "AI Summary",
-		description: "Summarize pages and explain reader comments with a local Ollama model, or your own OpenAI/Anthropic API key — no local install required.",
+		description: "Adds \"Summarize with AI\" to the right-click menu and the keyboard shortcut.",
 	},
 	{
 		key: "obsidianClipperEnabled",
-		label: "Obsidian Clipper",
-		description: "Send the current Medium article to Obsidian through the Advanced Obsidian URI plugin.",
+		label: "Save to Obsidian",
+		description: "\"Convert Page to Markdown\" sends the article to your Obsidian vault instead of downloading a .md file.",
+	},
+	{
+		key: "selfCiteEnabled",
+		label: "Cite My Story",
+		description: "In the Medium editor, suggests your own related past stories to link.",
 	},
 ];
 
 const BOOL_DEFAULTS: Record<string, boolean> = CAPABILITIES.reduce((acc, c) => {
-	acc[c.key] = c.key === "aiSummaryEnabled" || c.key === "obsidianClipperEnabled";
+	acc[c.key] = true;
 	return acc;
 }, {} as Record<string, boolean>);
 
@@ -37,7 +43,6 @@ const DEFAULT_CLOUD_MODEL: Record<Exclude<AiProvider, "ollama">, string> = {
 const DEFAULT_TRANSLATION_LANGUAGE = "";   // off by default: the audience reads English
 const DEFAULT_OBSIDIAN_FOLDER = "clippers";
 const DEFAULT_OBSIDIAN_PATH_TEMPLATE = "clippers/{title}.md";
-const DEFAULT_SITE_ALLOWLIST_TEXT = serializeSiteAllowlist(DEFAULT_SITE_ALLOWLIST);
 
 // Empty string = translation column disabled.
 const TRANSLATION_LANGUAGES: { value: string; label: string }[] = [
@@ -93,7 +98,6 @@ const Options = () => {
 	const [obsidianVault, setObsidianVault] = useState("");
 	const [obsidianFolder, setObsidianFolder] = useState(DEFAULT_OBSIDIAN_FOLDER);
 	const [obsidianPathTemplate, setObsidianPathTemplate] = useState(DEFAULT_OBSIDIAN_PATH_TEMPLATE);
-	const [siteAllowlistText, setSiteAllowlistText] = useState(DEFAULT_SITE_ALLOWLIST_TEXT);
 	const [models, setModels] = useState<OllamaModelInfo[]>([]);
 	const [connStatus, setConnStatus] = useState<ConnStatus>('unconnected');
 	const [connError, setConnError] = useState("");
@@ -158,7 +162,6 @@ const Options = () => {
 				obsidianVault: "",
 				obsidianFolder: DEFAULT_OBSIDIAN_FOLDER,
 				obsidianPathTemplate: "",
-				siteAllowlist: DEFAULT_SITE_ALLOWLIST,
 				aiProvider: DEFAULT_AI_PROVIDER,
 				aiApiKey: "",
 				aiCloudModel: "",
@@ -177,11 +180,6 @@ const Options = () => {
 				setObsidianVault(items.obsidianVault || "");
 				setObsidianFolder(items.obsidianFolder || DEFAULT_OBSIDIAN_FOLDER);
 				setObsidianPathTemplate(items.obsidianPathTemplate || DEFAULT_OBSIDIAN_PATH_TEMPLATE);
-				const allowlist = mergeDefaultSiteAllowlist(items.siteAllowlist || DEFAULT_SITE_ALLOWLIST);
-				setSiteAllowlistText(serializeSiteAllowlist(allowlist));
-				if (serializeSiteAllowlist(allowlist) !== serializeSiteAllowlist(parseSiteAllowlist(items.siteAllowlist || DEFAULT_SITE_ALLOWLIST))) {
-					chrome.storage.local.set({ siteAllowlist: allowlist });
-				}
 				setLoaded(true);
 				if (boolItems.aiSummaryEnabled && provider === "ollama") {
 					updateModelList(items.ollamaBaseUrl || DEFAULT_OLLAMA_URL);
@@ -256,20 +254,6 @@ const Options = () => {
 		}, () => flash("Saved"));
 	};
 
-	const saveSiteAllowlist = () => {
-		const next = parseSiteAllowlist(siteAllowlistText);
-		const value = next.length ? next : DEFAULT_SITE_ALLOWLIST;
-		setSiteAllowlistText(serializeSiteAllowlist(value));
-		const save = (note?: string) => chrome.storage.local.set({ siteAllowlist: value }, () => flash(note || "Saved"));
-		// Sites beyond the built-in list need the user's OK before the extension
-		// may run there. Requested inside this click handler, before any await.
-		const extra = extraAllowlistPatterns(value);
-		if (!extra.length) return save();
-		chrome.permissions.request({ origins: extra }, (granted) => {
-			save(granted ? "Saved" : "Saved. Sites you did not allow will not get the floating button");
-		});
-	};
-
 	// Matches NativeMind's pullOllamaModel (background-fns.ts:548-589 + OllamaDownloadModal.vue:122-135)
 	const pullModel = async () => {
 		const name = pullName.trim();
@@ -277,7 +261,7 @@ const Options = () => {
 		if (pullAbort.current) pullAbort.current.abort();
 		const ac = new AbortController();
 		pullAbort.current = ac;
-		setPullState({ active: true, status: "starting…", completed: 0, total: 0, error: "" });
+		setPullState({ active: true, status: "starting...", completed: 0, total: 0, error: "" });
 		try {
 			const res = await fetch((ollamaUrl || DEFAULT_OLLAMA_URL).replace(/\/$/, "") + "/api/pull", {
 				method: "POST",
@@ -339,7 +323,6 @@ const Options = () => {
 				"obsidianVault",
 				"obsidianFolder",
 				"obsidianPathTemplate",
-				"siteAllowlist",
 				"aiProvider",
 				"aiApiKey",
 				"aiCloudModel",
@@ -355,7 +338,6 @@ const Options = () => {
 				setObsidianVault("");
 				setObsidianFolder(DEFAULT_OBSIDIAN_FOLDER);
 				setObsidianPathTemplate(DEFAULT_OBSIDIAN_PATH_TEMPLATE);
-				setSiteAllowlistText(DEFAULT_SITE_ALLOWLIST_TEXT);
 				setModels([]);
 				setConnStatus('unconnected');
 				flash("Reset");
@@ -363,349 +345,198 @@ const Options = () => {
 		);
 	};
 
-	const handleTweetClick = (event) => {
-		event.preventDefault();
-		const text = encodeURIComponent("Found a great #chrome extension(Medium Enhancer) — AI summaries, Markdown export, and an Obsidian clipper for #Medium articles");
-		const via = encodeURIComponent("WesleyWei0316");
-		const related = encodeURIComponent("compzets");
-		const url = encodeURIComponent("https://github.com/tfrain/medium-enhancer");
-		window.open(
-			`https://x.com/intent/tweet?text=${text}&via=${via}&related=${related}&url=${url}`,
-			"_blank"
-		);
-	};
-
 	if (!loaded) return null;
 
-	const dotColor =
-		connStatus === 'connected' ? '#02b875' :
-		connStatus === 'loading' ? '#f0a020' :
-		connStatus === 'error' ? '#c62828' : '#888';
-
-	const dotTitle =
-		connStatus === 'connected' ? 'Connected to Ollama' :
-		connStatus === 'loading' ? 'Checking…' :
-		connStatus === 'error' ? `Error: ${connError}` : 'Not connected';
+	const statusLabel =
+		connStatus === 'connected' ? 'Connected' :
+		connStatus === 'loading' ? 'Checking...' :
+		connStatus === 'error' ? 'Not connected' : 'Not checked';
 
 	const pullPct = pullState.total > 0 ? Math.round((pullState.completed / pullState.total) * 100) : 0;
+	const version = chrome.runtime.getManifest().version;
+
+	const confirmReset = () => {
+		if (window.confirm("Reset all Medium Enhancer settings to their defaults? Your API key will be removed.")) resetOptions();
+	};
 
 	return (
-		<div className="main-container">
-			<header>Medium Enhancer Options</header>
-
-			<h1>Capabilities</h1>
-			<hr />
-			{CAPABILITIES.map((c) => (
-				<div className="checkbox" key={c.key}>
-					<label>
-						<input
-							type="checkbox"
-							checked={!!enabled[c.key]}
-							onChange={(e) => toggle(c.key, e.target.checked)}
-						/>
-						<span></span> {c.label}
-					</label>
-					<div style={{ marginLeft: 24, fontSize: 12, color: '#888' }}>{c.description}</div>
+		<div className="opt">
+			<header className="opt-head">
+				<img src={iconUrl} alt="" className="opt-logo" />
+				<div>
+					<h1>Medium Enhancer</h1>
+					<p className="opt-sub">Settings · v{version}</p>
 				</div>
-			))}
+			</header>
 
-			<h1>Site Access</h1>
-			<hr />
-			<div style={{ marginBottom: 10, maxWidth: 620, fontSize: 12, color: '#888' }}>
-				Medium Enhancer is injected by Chrome on HTTP/HTTPS pages, but it only mounts the floating AI button on hosts in this allowlist. Use <code>*.example.com</code> for subdomains, or <code>*</code> to allow every site.
-			</div>
-			<textarea
-				value={siteAllowlistText}
-				onChange={(e) => setSiteAllowlistText(e.target.value)}
-				onBlur={saveSiteAllowlist}
-				style={{ width: 420, minHeight: 150, fontFamily: 'monospace', fontSize: 12 }}
-			/>
-			<div style={{ marginTop: 6, marginBottom: 16 }}>
-				<button type="button" onClick={() => {
-					setSiteAllowlistText(DEFAULT_SITE_ALLOWLIST_TEXT);
-					chrome.storage.local.set({ siteAllowlist: DEFAULT_SITE_ALLOWLIST }, () => flash("Saved"));
-				}} style={{ fontSize: 13 }}>
-					Restore default sites
-				</button>
-			</div>
+			<section className="card">
+				<h2>Features</h2>
+				{CAPABILITIES.map((c) => (
+					<label className="row" key={c.key}>
+						<div className="row-text">
+							<div className="row-title">{c.label}</div>
+							<div className="hint">{c.description}</div>
+						</div>
+						<span className="switch">
+							<input type="checkbox" checked={!!enabled[c.key]} onChange={(e) => toggle(c.key, e.target.checked)} />
+							<span className="slider" />
+						</span>
+					</label>
+				))}
+			</section>
 
 			{enabled.aiSummaryEnabled && (
-				<>
-					<h1>AI Provider</h1>
-					<hr />
-					<div style={{ marginBottom: 14, maxWidth: 560, fontSize: 12, color: '#888' }}>
-						Ollama runs fully local and costs nothing, but needs a local install. OpenAI/Anthropic use your own API key — nothing is sent through us — and work with zero setup.
-					</div>
-					<div style={{ marginBottom: 16, display: 'flex', gap: 16 }}>
+				<section className="card">
+					<h2>AI</h2>
+					<p className="hint">Ollama runs on your computer and is free. OpenAI and Anthropic use your own API key; requests go straight to them, never through us.</p>
+
+					<div className="segmented" role="radiogroup" aria-label="AI provider">
 						{(["ollama", "openai", "anthropic"] as AiProvider[]).map((p) => (
-							<label key={p} style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-								<input type="radio" name="ai-provider" checked={aiProvider === p} onChange={() => selectAiProvider(p)} />
-								{p === "ollama" ? "Ollama (local)" : p === "openai" ? "OpenAI (your key)" : "Anthropic (your key)"}
-							</label>
+							<button key={p} type="button" role="radio" aria-checked={aiProvider === p}
+								className={aiProvider === p ? "on" : ""} onClick={() => selectAiProvider(p)}>
+								{p === "ollama" ? "Ollama (local)" : p === "openai" ? "OpenAI" : "Anthropic"}
+							</button>
 						))}
 					</div>
 
 					{aiProvider !== "ollama" && (
 						<>
-							<div style={{ marginBottom: 10 }}>
-								<label htmlFor="ai-api-key" style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
-									{aiProvider === "openai" ? "OpenAI" : "Anthropic"} API Key
-								</label>
-								<input
-									id="ai-api-key"
-									type="password"
-									value={aiApiKey}
-									onChange={(e) => setAiApiKey(e.target.value)}
-									onBlur={saveAiApiKey}
-									style={{ width: 340 }}
-									placeholder={aiProvider === "openai" ? "sk-..." : "sk-ant-..."}
-									autoComplete="off"
-								/>
-								<div style={{ marginTop: 4, fontSize: 12, color: '#888', maxWidth: 480 }}>
-									Stored locally in your browser only (<code>chrome.storage.local</code>) — never synced to Google or sent anywhere but {aiProvider === "openai" ? "api.openai.com" : "api.anthropic.com"}.
-								</div>
+							<div className="field">
+								<label htmlFor="ai-api-key">{aiProvider === "openai" ? "OpenAI" : "Anthropic"} API key</label>
+								<input id="ai-api-key" type="password" value={aiApiKey} autoComplete="off"
+									onChange={(e) => setAiApiKey(e.target.value)} onBlur={saveAiApiKey}
+									placeholder={aiProvider === "openai" ? "sk-..." : "sk-ant-..."} />
+								<div className="hint">Stored only in this browser and sent only to {aiProvider === "openai" ? "api.openai.com" : "api.anthropic.com"}.</div>
 							</div>
-							<div style={{ marginBottom: 16 }}>
-								<label htmlFor="ai-cloud-model" style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
-									Model
-								</label>
-								<input
-									id="ai-cloud-model"
-									type="text"
-									value={aiCloudModel}
-									onChange={(e) => setAiCloudModel(e.target.value)}
-									onBlur={saveAiCloudModel}
-									style={{ width: 340 }}
-									placeholder={DEFAULT_CLOUD_MODEL[aiProvider]}
-								/>
+							<div className="field">
+								<label htmlFor="ai-cloud-model">Model</label>
+								<input id="ai-cloud-model" type="text" value={aiCloudModel}
+									onChange={(e) => setAiCloudModel(e.target.value)} onBlur={saveAiCloudModel}
+									placeholder={DEFAULT_CLOUD_MODEL[aiProvider]} />
 							</div>
 						</>
 					)}
 
 					{aiProvider === "ollama" && (
-					<>
-					<h1>
-						Ollama Settings
-						<span
-							title={dotTitle}
-							style={{
-								display: 'inline-block',
-								width: 10,
-								height: 10,
-								borderRadius: '50%',
-								background: dotColor,
-								marginLeft: 10,
-								verticalAlign: 'middle',
-							}}
-						/>
-					</h1>
-					<hr />
-					<div style={{ marginBottom: 10 }}>
-						<label htmlFor="ollama-url" style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
-							Base URL
-						</label>
-						<input
-							id="ollama-url"
-							type="text"
-							value={ollamaUrl}
-							onChange={(e) => setOllamaUrl(e.target.value)}
-							onBlur={saveUrl}
-							style={{ width: 340 }}
-							placeholder={DEFAULT_OLLAMA_URL}
-						/>
-					</div>
-
-					<div style={{ marginBottom: 10 }}>
-						<label htmlFor="ollama-model" style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
-							Model
-						</label>
-						<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-							<select
-								id="ollama-model"
-								value={ollamaModel}
-								onChange={(e) => selectModel(e.target.value)}
-								disabled={connStatus !== 'connected' || models.length === 0}
-								style={{ width: 420, padding: 4 }}
-							>
-								{connStatus === 'loading' && <option value="">Loading…</option>}
-								{connStatus === 'error' && <option value="">⚠ Not connected to Ollama</option>}
-								{connStatus === 'connected' && models.length === 0 && <option value="">No models downloaded</option>}
-								{ollamaModel && !models.find((m) => m.name === ollamaModel) && (
-									<option value={ollamaModel}>{ollamaModel} (saved)</option>
+						<>
+							<div className="field">
+								<label htmlFor="ollama-url">
+									Ollama address <span className={`pill pill-${connStatus}`} title={connError || statusLabel}>{statusLabel}</span>
+								</label>
+								<input id="ollama-url" type="text" value={ollamaUrl}
+									onChange={(e) => setOllamaUrl(e.target.value)} onBlur={saveUrl} placeholder={DEFAULT_OLLAMA_URL} />
+							</div>
+							<div className="field">
+								<label htmlFor="ollama-model">Model</label>
+								<div className="inline">
+									<select id="ollama-model" value={ollamaModel} onChange={(e) => selectModel(e.target.value)}
+										disabled={connStatus !== 'connected' || models.length === 0}>
+										{connStatus === 'loading' && <option value="">Loading...</option>}
+										{connStatus === 'error' && <option value="">Not connected to Ollama</option>}
+										{connStatus === 'connected' && models.length === 0 && <option value="">No models downloaded</option>}
+										{ollamaModel && !models.find((m) => m.name === ollamaModel) && (
+											<option value={ollamaModel}>{ollamaModel} (saved)</option>
+										)}
+										{models.map((m) => (
+											<option key={m.name} value={m.name}>{formatModelLabel(m)}</option>
+										))}
+									</select>
+									<button type="button" className="btn" onClick={() => updateModelList(ollamaUrl)}>
+										{connStatus === 'loading' ? 'Checking...' : 'Refresh'}
+									</button>
+								</div>
+								{connStatus === 'error' && (
+									<div className="hint err">
+										Cannot reach Ollama at <code>{ollamaUrl}</code>. Is <code>ollama serve</code> running?
+									</div>
 								)}
-								{models.map((m) => (
-									<option key={m.name} value={m.name}>{formatModelLabel(m)}</option>
-								))}
-							</select>
-							<button type="button" onClick={() => updateModelList(ollamaUrl)} style={{ fontSize: 13 }}>
-								{connStatus === 'loading' ? 'Loading…' : 'Refresh'}
-							</button>
-						</div>
-						{connStatus === 'error' && (
-							<div style={{ fontSize: 12, color: '#c62828', marginTop: 4 }}>
-								Cannot reach Ollama: {connError}. Is <code>ollama serve</code> running at <code>{ollamaUrl}</code>? You may also need <code>OLLAMA_ORIGINS="*"</code>.
 							</div>
-						)}
-						{connStatus === 'connected' && models.length === 0 && (
-							<div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
-								No models downloaded. Pull one below (e.g. <code>llama3.2</code>, <code>qwen2.5:3b</code>).
-							</div>
-						)}
-					</div>
+							<details className="more">
+								<summary>Download a model</summary>
+								<div className="inline">
+									<input type="text" value={pullName} onChange={(e) => setPullName(e.target.value)}
+										placeholder="e.g. llama3.2 or qwen2.5:3b" disabled={pullState.active || connStatus !== 'connected'} />
+									{!pullState.active ? (
+										<button type="button" className="btn" onClick={pullModel} disabled={!pullName.trim() || connStatus !== 'connected'}>Download</button>
+									) : (
+										<button type="button" className="btn" onClick={cancelPull}>Cancel</button>
+									)}
+								</div>
+								{(pullState.active || pullState.status || pullState.error) && (
+									<div className="hint">
+										{pullState.error ? (
+											<span className="err">Error: {pullState.error}</span>
+										) : (
+											<>
+												{pullState.status}{pullState.total > 0 && ` · ${formatSize(pullState.completed)} / ${formatSize(pullState.total)} (${pullPct}%)`}
+												{pullState.total > 0 && <div className="bar"><div style={{ width: `${pullPct}%` }} /></div>}
+											</>
+										)}
+									</div>
+								)}
+							</details>
+						</>
+					)}
 
-					<div style={{ marginBottom: 10 }}>
-						<label htmlFor="translation-language" style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
-							Translation language
-						</label>
-						<select
-							id="translation-language"
-							value={translationLanguage}
-							onChange={(e) => selectTranslationLanguage(e.target.value)}
-							style={{ width: 420, padding: 4 }}
-						>
+					<div className="field">
+						<label htmlFor="translation-language">Also translate the result into</label>
+						<select id="translation-language" value={translationLanguage} onChange={(e) => selectTranslationLanguage(e.target.value)}>
 							{TRANSLATION_LANGUAGES.map((l) => (
 								<option key={l.value} value={l.value}>{l.label}</option>
 							))}
 						</select>
-						<div style={{ fontSize: 12, color: '#888', marginTop: 4, maxWidth: 520 }}>
-							The AI panel shows the English response on the left and a translation on the right. Pick "Off" to hide the translation column.
-						</div>
+						<div className="hint">Shows a second column with the translation. Off by default.</div>
 					</div>
 
-					<div style={{ marginBottom: 10 }}>
-						<label htmlFor="pull-model" style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
-							Download model
-						</label>
-						<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-							<input
-								id="pull-model"
-								type="text"
-								value={pullName}
-								onChange={(e) => setPullName(e.target.value)}
-								placeholder="e.g. llama3.2 or qwen2.5:3b"
-								disabled={pullState.active || connStatus !== 'connected'}
-								style={{ width: 320 }}
-							/>
-							{!pullState.active ? (
-								<button type="button" onClick={pullModel} disabled={!pullName.trim() || connStatus !== 'connected'} style={{ fontSize: 13 }}>
-									Pull
-								</button>
-							) : (
-								<button type="button" onClick={cancelPull} style={{ fontSize: 13 }}>
-									Cancel
-								</button>
-							)}
-						</div>
-						{(pullState.active || pullState.status || pullState.error) && (
-							<div style={{ marginTop: 6, fontSize: 12, color: '#555', maxWidth: 480 }}>
-								{pullState.error ? (
-									<span style={{ color: '#c62828' }}>Error: {pullState.error}</span>
-								) : (
-									<>
-										<div>{pullState.status}{pullState.total > 0 && ` — ${formatSize(pullState.completed)} / ${formatSize(pullState.total)} (${pullPct}%)`}</div>
-										{pullState.total > 0 && (
-											<div style={{ height: 6, background: '#eee', borderRadius: 3, marginTop: 4, overflow: 'hidden' }}>
-												<div style={{ height: '100%', width: `${pullPct}%`, background: '#02b875', transition: 'width 0.2s' }} />
-											</div>
-										)}
-									</>
-								)}
-							</div>
-						)}
+					<div className="hint">
+						Right-click a page and choose "Summarize with AI", or press <kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>.{" "}
+						<a href="#" onClick={(e) => { e.preventDefault(); chrome.tabs.create({ url: "chrome://extensions/shortcuts" }); }}>Change shortcut</a>
 					</div>
-
-					</>
-					)}
-
-					<div style={{ fontSize: 12, color: '#888', maxWidth: 520 }}>
-						Trigger the summary from the page: right-click → "Summarize with AI", or press <code>Ctrl/Cmd+Shift+S</code> (customizable at <code>chrome://extensions/shortcuts</code>).
-					</div>
-				</>
+				</section>
 			)}
 
 			{enabled.obsidianClipperEnabled && (
-				<>
-					<h1>Obsidian Clipper</h1>
-					<hr />
-					<div style={{ marginBottom: 10, maxWidth: 560, fontSize: 12, color: '#888' }}>
-						Requires the Obsidian community plugin <code>Advanced Obsidian URI</code>. Medium Enhancer sends Markdown directly through the URI when short enough; otherwise it copies Markdown to the clipboard and opens Obsidian with <code>clipboard=true</code>.
+				<section className="card">
+					<h2>Obsidian</h2>
+					<p className="hint">Needs the <code>Advanced Obsidian URI</code> community plugin in Obsidian.</p>
+					<div className="field">
+						<label htmlFor="obsidian-vault">Vault name</label>
+						<input id="obsidian-vault" type="text" value={obsidianVault}
+							onChange={(e) => setObsidianVault(e.target.value)} onBlur={saveObsidianSettings} placeholder="Blank = your default vault" />
 					</div>
-					<div style={{ marginBottom: 10 }}>
-						<label htmlFor="obsidian-vault" style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
-							Vault name
-						</label>
-						<input
-							id="obsidian-vault"
-							type="text"
-							value={obsidianVault}
-							onChange={(e) => setObsidianVault(e.target.value)}
-							onBlur={saveObsidianSettings}
-							style={{ width: 340 }}
-							placeholder="Leave blank for default vault"
-						/>
+					<div className="field">
+						<label htmlFor="obsidian-path-template">Note path</label>
+						<input id="obsidian-path-template" type="text" value={obsidianPathTemplate}
+							onChange={(e) => setObsidianPathTemplate(e.target.value)} onBlur={saveObsidianSettings} placeholder={DEFAULT_OBSIDIAN_PATH_TEMPLATE} />
+						<div className="hint">Variables: <code>{'{title}'}</code> <code>{'{author}'}</code> <code>{'{domain}'}</code> <code>{'{date}'}</code>. Example: <code>Medium/{'{date}'} - {'{title}'}.md</code></div>
 					</div>
-					<div style={{ marginBottom: 10 }}>
-						<label htmlFor="obsidian-path-template" style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
-							Note path template
-						</label>
-						<input
-							id="obsidian-path-template"
-							type="text"
-							value={obsidianPathTemplate}
-							onChange={(e) => setObsidianPathTemplate(e.target.value)}
-							onBlur={saveObsidianSettings}
-							style={{ width: 420 }}
-							placeholder={DEFAULT_OBSIDIAN_PATH_TEMPLATE}
-						/>
-						<div style={{ fontSize: 12, color: '#888', marginTop: 4, maxWidth: 560 }}>
-							Overrides Folder when set. Supported variables: <code>{'{title}'}</code>, <code>{'{author}'}</code>, <code>{'{domain}'}</code>, <code>{'{date}'}</code>. Example: <code>Medium/{'{domain}'}/{'{date}'} - {'{title}'}.md</code>.
-						</div>
+					<div className="field">
+						<label htmlFor="obsidian-folder">Folder (used when Note path is blank)</label>
+						<input id="obsidian-folder" type="text" value={obsidianFolder}
+							onChange={(e) => setObsidianFolder(e.target.value)} onBlur={saveObsidianSettings} placeholder={DEFAULT_OBSIDIAN_FOLDER} />
 					</div>
-					<div style={{ marginBottom: 10 }}>
-						<label htmlFor="obsidian-folder" style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
-							Folder fallback
-						</label>
-						<input
-							id="obsidian-folder"
-							type="text"
-							value={obsidianFolder}
-							onChange={(e) => setObsidianFolder(e.target.value)}
-							onBlur={saveObsidianSettings}
-							style={{ width: 340 }}
-							placeholder={DEFAULT_OBSIDIAN_FOLDER}
-						/>
-						<div style={{ fontSize: 12, color: '#888', marginTop: 4, maxWidth: 520 }}>
-							Used only when Note path template is blank. Fallback path: <code>{obsidianFolder || DEFAULT_OBSIDIAN_FOLDER}/Article Title.md</code>.
-						</div>
-					</div>
-				</>
+				</section>
 			)}
 
-			<br />
-			<hr />
-			<br />
-			<button style={{ fontSize: '16px' }} id="btnReset" onClick={resetOptions}>Reset</button>
+			<section className="card card-plain">
+				<div className="row">
+					<div className="row-text">
+						<div className="row-title">Reset settings</div>
+						<div className="hint">Restore every option to its default and remove your API key.</div>
+					</div>
+					<button type="button" className="btn btn-danger" onClick={confirmReset}>Reset</button>
+				</div>
+			</section>
 
-			<br />
-			<br />
-			<br />
-			<div>If you like this extension, just share to people who need this.</div>
-			<br />
-			<div className="social-buttons fr">
-				<a href="#" className="twitter-share-button" onClick={handleTweetClick}>Tweet</a>
-			</div>
-			<br />
-			<br />
-			Source Code: It will be public soon.
-			<br />
-			<p>
-				Made &#9829; by <a href="https://wesley-wei.medium.com/" target="_blank">WesleyWei</a>
-				<br />
-				Send me feedback  &#9829; via <a href="https://t.me/tfrain_w" target="_blank">My telegram</a>
-			</p>
-			<br />
-			<br />
-			<div id="status">{statusMessage}</div>
+			<footer className="opt-foot">
+				Medium Enhancer v{version} ·{" "}
+				<a href="https://github.com/tfrain/medium-enhancer" target="_blank" rel="noopener">GitHub</a> ·{" "}
+				<a href="https://github.com/tfrain/medium-enhancer/blob/main/PRIVACY.md" target="_blank" rel="noopener">Privacy</a> ·{" "}
+				<a href="https://github.com/tfrain/medium-enhancer/issues" target="_blank" rel="noopener">Feedback</a> ·{" "}
+				by <a href="https://wesley-wei.medium.com/" target="_blank" rel="noopener">Wesley Wei</a>
+			</footer>
+
+			<div className={`toast ${statusMessage ? "show" : ""}`} role="status">{statusMessage}</div>
 		</div>
 	);
 };

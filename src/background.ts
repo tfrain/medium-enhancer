@@ -1,7 +1,6 @@
 import { createObsidianAdvancedUri } from "./shared/obsidian-uri"
 import { triggerMarkdownDownload } from "./shared/markdown-download"
 import { sendToTab } from "./shared/injection"
-import { DEFAULT_SITE_ALLOWLIST, extraAllowlistPatterns, mergeDefaultSiteAllowlist } from "./shared/site-access"
 
 interface Feed {
   name: string;
@@ -111,8 +110,10 @@ const sendToActiveTab = async (message: unknown) => {
   }
 }
 
-chrome.commands.onCommand.addListener((command) => {
-  if (command === 'summarize') sendToActiveTab({ type: 'showSummaryPanel' })
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== 'summarize') return
+  const { aiSummaryEnabled } = await chrome.storage.local.get({ aiSummaryEnabled: true })
+  if (aiSummaryEnabled) sendToActiveTab({ type: 'showSummaryPanel' })
 })
 
 chrome.contextMenus.onClicked.addListener(async (item, tab) => {
@@ -139,37 +140,6 @@ chrome.contextMenus.onClicked.addListener(async (item, tab) => {
   }
 })
 
-// Sites the user adds to the allowlist get the content script registered at
-// runtime, but only once they have granted that site (Options asks on save).
-const USER_SITES_SCRIPT_ID = 'user-allowlist-sites'
-const syncUserSiteScripts = async () => {
-  try {
-    const { siteAllowlist } = await chrome.storage.local.get({ siteAllowlist: DEFAULT_SITE_ALLOWLIST })
-    const wanted = extraAllowlistPatterns(mergeDefaultSiteAllowlist(siteAllowlist))
-    const granted: string[] = []
-    for (const pattern of wanted) {
-      if (await chrome.permissions.contains({ origins: [pattern] })) granted.push(pattern)
-    }
-    const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [USER_SITES_SCRIPT_ID] })
-    if (existing.length) await chrome.scripting.unregisterContentScripts({ ids: [USER_SITES_SCRIPT_ID] })
-    if (!granted.length) return
-    const scripts = chrome.runtime.getManifest().content_scripts || []
-    await chrome.scripting.registerContentScripts([{
-      id: USER_SITES_SCRIPT_ID,
-      matches: granted,
-      js: scripts.flatMap((c) => c.js || []),
-      css: scripts.flatMap((c) => c.css || []),
-      runAt: 'document_end',
-    }])
-  } catch (e) {
-    console.error('[bg] could not register user-site scripts', e)
-  }
-}
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.siteAllowlist) syncUserSiteScripts()
-})
-chrome.permissions.onAdded.addListener(() => syncUserSiteScripts())
-chrome.permissions.onRemoved.addListener(() => syncUserSiteScripts())
 
 // Strip the `Origin` header from requests to local Ollama (port 11434) so the
 // service doesn't return 403 when OLLAMA_ORIGINS isn't configured.
@@ -201,16 +171,19 @@ const ensureOllamaDnrRule = async () => {
   }
 };
 
-const ensureContextMenus = () => {
+// "Summarize with AI" is shown only while AI Summary is on in Options.
+const ensureContextMenus = async () => {
+  const { aiSummaryEnabled } = await chrome.storage.local.get({ aiSummaryEnabled: true })
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({
-      id: "summarize_menu",
-      title: "Summarize with AI",
-      type: 'normal',
-      contexts: ["page", "selection"],
-    });
-    // Works on any site (not gated by the feature site-allowlist), and only
-    // ever runs when the user explicitly clicks it — never automatically.
+    if (aiSummaryEnabled) {
+      chrome.contextMenus.create({
+        id: "summarize_menu",
+        title: "Summarize with AI",
+        type: 'normal',
+        contexts: ["page", "selection"],
+      });
+    }
+    // Works on any page, and only ever runs when the user clicks it.
     chrome.contextMenus.create({
       id: "clip_markdown_menu",
       title: "Convert Page to Markdown",
@@ -220,16 +193,18 @@ const ensureContextMenus = () => {
   });
 };
 
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.aiSummaryEnabled) ensureContextMenus()
+})
+
 chrome.runtime.onStartup.addListener(() => {
   ensureContextMenus();
   ensureOllamaDnrRule();
-  syncUserSiteScripts();
 });
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   ensureContextMenus();
   ensureOllamaDnrRule();
-  syncUserSiteScripts();
   if (details.reason === 'install') {   // not on every update: a new tab each release is a nuisance
     let url = chrome.runtime.getURL("options.html");
     await chrome.tabs.create({ url });

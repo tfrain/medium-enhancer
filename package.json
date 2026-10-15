@@ -26,8 +26,6 @@
   "manifest": {
     "host_permissions": [
       "https://*.medium.com/*",
-      "https://*.inoreader.com/*",
-      "https://*.innoreader.com/*",
       "https://*.itnext.io/*",
       "https://*.uxdesign.cc/*",
       "https://*.gopubby.com/*",
