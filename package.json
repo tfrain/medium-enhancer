@@ -1,7 +1,7 @@
 {
   "name": "medium-enhancer",
   "displayName": "Medium Enhancer",
-  "version": "0.6.7",
+  "version": "0.7.0",
   "description": "AI summaries (local Ollama or your own OpenAI/Anthropic key), one-click Markdown/Obsidian export, and RSS discovery for any long-form article.",
   "author": "Wesley Wei",
   "scripts": {
@@ -25,7 +25,17 @@
   },
   "manifest": {
     "host_permissions": [
-      "https://*/*",
+      "https://*.medium.com/*",
+      "https://*.inoreader.com/*",
+      "https://*.innoreader.com/*",
+      "https://*.itnext.io/*",
+      "https://*.uxdesign.cc/*",
+      "https://*.gopubby.com/*",
+      "https://*.towardsai.net/*",
+      "https://*.bettermarketing.pub/*",
+      "https://*.writingcooperative.com/*",
+      "https://api.openai.com/*",
+      "https://api.anthropic.com/*",
       "http://localhost/*",
       "http://127.0.0.1/*"
     ],
@@ -47,6 +57,10 @@
       "clipboardWrite",
       "downloads"
     ],
-    "author": "cwei3790@gmail.com"
+    "author": "cwei3790@gmail.com",
+    "optional_host_permissions": [
+      "https://*/*",
+      "http://*/*"
+    ]
   }
 }

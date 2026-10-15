@@ -20,8 +20,8 @@ import {
   isMediumEditorPage,
   scoreRelevance,
   type SelfCitePost,
-} from './lib/self-cite'
-import { showToast } from './util/toast'
+} from '../lib/self-cite'
+import { showToast } from '../util/toast'
 
 const BALL_ID = '__me_selfcite_ball__'
 const PANEL_ID = '__me_selfcite_panel__'

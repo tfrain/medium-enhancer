@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import './css/chrome_shared.css';
-import { DEFAULT_SITE_ALLOWLIST, mergeDefaultSiteAllowlist, parseSiteAllowlist, serializeSiteAllowlist } from "./shared/site-access";
+import { DEFAULT_SITE_ALLOWLIST, extraAllowlistPatterns, mergeDefaultSiteAllowlist, ollamaPermissionPattern, parseSiteAllowlist, serializeSiteAllowlist } from "./shared/site-access";
 
 type Capability = {
 	key: string;
@@ -206,8 +206,18 @@ const Options = () => {
 
 	const saveUrl = () => {
 		const v = ollamaUrl.trim() || DEFAULT_OLLAMA_URL;
-		chrome.storage.local.set({ ollamaBaseUrl: v }, () => flash("Saved"));
-		updateModelList(v);
+		const save = () => {
+			chrome.storage.local.set({ ollamaBaseUrl: v }, () => flash("Saved"));
+			updateModelList(v);
+		};
+		// localhost is granted at install; an Ollama on another machine needs its
+		// host. Must be requested inside this click handler, before any await.
+		const pattern = ollamaPermissionPattern(v);
+		if (!pattern) return save();
+		chrome.permissions.request({ origins: [pattern] }, (granted) => {
+			save();
+			if (!granted) flash("Saved, but access to that host was not allowed, so Ollama cannot be reached");
+		});
 	};
 
 	const selectModel = (name: string) => {
@@ -250,7 +260,14 @@ const Options = () => {
 		const next = parseSiteAllowlist(siteAllowlistText);
 		const value = next.length ? next : DEFAULT_SITE_ALLOWLIST;
 		setSiteAllowlistText(serializeSiteAllowlist(value));
-		chrome.storage.local.set({ siteAllowlist: value }, () => flash("Saved"));
+		const save = (note?: string) => chrome.storage.local.set({ siteAllowlist: value }, () => flash(note || "Saved"));
+		// Sites beyond the built-in list need the user's OK before the extension
+		// may run there. Requested inside this click handler, before any await.
+		const extra = extraAllowlistPatterns(value);
+		if (!extra.length) return save();
+		chrome.permissions.request({ origins: extra }, (granted) => {
+			save(granted ? "Saved" : "Saved. Sites you did not allow will not get the floating button");
+		});
 	};
 
 	// Matches NativeMind's pullOllamaModel (background-fns.ts:548-589 + OllamaDownloadModal.vue:122-135)

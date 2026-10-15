@@ -1,6 +1,7 @@
 import "./popup.css"
 import { useState, useEffect } from "react"
 import { triggerMarkdownDownload } from "./shared/markdown-download"
+import { sendToTab } from "./shared/injection"
 
 interface Feed {
   name: string
@@ -68,31 +69,29 @@ function IndexPopup() {
   const handleClipToMarkdown = () => {
     setClipStatus("working")
     setClipError("")
-    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
       if (!tab?.id) {
         setClipStatus("error")
         setClipError("No active tab found.")
         return
       }
-      chrome.tabs.sendMessage(tab.id, { type: "clipPageAsMarkdown" }, async (response) => {
-        if (chrome.runtime.lastError || !response?.ok) {
-          setClipStatus("error")
-          setClipError(response?.error || chrome.runtime.lastError?.message || "Could not read this page.")
-          return
-        }
+      try {
+        // Opening the popup granted activeTab, so this works on any normal page.
+        const response: any = await sendToTab(tab.id, { type: "clipPageAsMarkdown" })
+        if (!response?.ok) throw new Error(response?.error || "Could not read this page.")
         // mode 'obsidian': the content script already sent it to the
         // configured vault folder. mode 'download': fall back to a file save.
-        try {
-          if (response.mode === "download") {
-            await triggerMarkdownDownload(response.title, response.markdown)
-          }
-          setClipStatus("done")
-          setTimeout(() => setClipStatus("idle"), 1500)
-        } catch (e: any) {
-          setClipStatus("error")
-          setClipError(e?.message || "Download failed.")
+        if (response.mode === "download") {
+          await triggerMarkdownDownload(response.title, response.markdown)
         }
-      })
+        setClipStatus("done")
+        setTimeout(() => setClipStatus("idle"), 1500)
+      } catch (e: any) {
+        setClipStatus("error")
+        setClipError(/Cannot access|cannot be scripted/i.test(e?.message || "")
+          ? "Chrome does not allow extensions on this page."
+          : e?.message || "Could not read this page.")
+      }
     })
   }
 
@@ -162,7 +161,7 @@ function IndexPopup() {
         disabled={clipStatus === "working"}
       >
         {clipStatus === "working"
-          ? "Converting…"
+          ? "Converting..."
           : clipStatus === "done"
             ? "Saved ✓"
             : "Convert Page to Markdown"}

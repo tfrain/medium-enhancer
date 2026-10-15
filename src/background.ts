@@ -1,5 +1,7 @@
 import { createObsidianAdvancedUri } from "./shared/obsidian-uri"
 import { triggerMarkdownDownload } from "./shared/markdown-download"
+import { sendToTab } from "./shared/injection"
+import { DEFAULT_SITE_ALLOWLIST, extraAllowlistPatterns, mergeDefaultSiteAllowlist } from "./shared/site-access"
 
 interface Feed {
   name: string;
@@ -92,61 +94,82 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true
 })
 
-const getCurrentTab = (cb) => {
-  chrome.tabs.query({ active: true, currentWindow: true }, ([activeTab]) => {
-    cb(activeTab)
-  })
-}
+const getCurrentTab = (): Promise<chrome.tabs.Tab | undefined> =>
+  new Promise((resolve) => chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => resolve(tab)))
 
-const execOnCurrentTab = (command) => {
-  getCurrentTab((tab) => {
-    if (tab && tab.url.indexOf("chrome") !== 0) {
-      chrome.tabs.sendMessage(tab.id, command, {}, () => {
-        chrome.runtime.lastError // suppress unchecked error
-      })
-    }
-  })
+// The keyboard shortcut and the context menu both count as a user gesture, so
+// activeTab lets us inject the content script on any normal page. Pages Chrome
+// does not allow (chrome://, the Web Store) fail here and are skipped quietly.
+const sendToActiveTab = async (message: unknown) => {
+  const tab = await getCurrentTab()
+  if (!tab || tab.id == null) return undefined
+  try {
+    return await sendToTab(tab.id, message)
+  } catch (e) {
+    console.warn('[bg] cannot run on this page', e)
+    return undefined
+  }
 }
 
 chrome.commands.onCommand.addListener((command) => {
-  if (command === 'summarize') {
-    execOnCurrentTab({ type: 'showSummaryPanel' })
+  if (command === 'summarize') sendToActiveTab({ type: 'showSummaryPanel' })
+})
+
+chrome.contextMenus.onClicked.addListener(async (item, tab) => {
+  if (!tab || tab.id == null) return
+  if (item.menuItemId === 'summarize_menu') {
+    await sendToTab(tab.id, { type: 'showSummaryPanel' }).catch((e) => console.warn('[bg] cannot run on this page', e))
+  }
+  if (item.menuItemId === 'clip_markdown_menu') {
+    const response: any = await sendToTab(tab.id, { type: 'clipPageAsMarkdown' })
+      .catch((e) => { console.warn('[bg] cannot run on this page', e); return undefined })
+    if (!response?.ok) {
+      if (response) console.error('[bg] clip markdown failed', response.error || 'unknown error')
+      return
+    }
+    // mode 'obsidian' means the content script already sent it to the
+    // configured vault folder; only 'download' needs a file save here.
+    if (response.mode === 'download') {
+      try {
+        await triggerMarkdownDownload(response.title, response.markdown)
+      } catch (e) {
+        console.error('[bg] markdown download failed', e)
+      }
+    }
   }
 })
 
-chrome.contextMenus.onClicked.addListener(function (item, tab) {
-  if (item.menuItemId === 'summarize_menu') {
-    if (tab && tab.id != null) {
-      chrome.tabs.sendMessage(tab.id, { type: 'showSummaryPanel' }, () => {
-        chrome.runtime.lastError // suppress
-      })
+// Sites the user adds to the allowlist get the content script registered at
+// runtime, but only once they have granted that site (Options asks on save).
+const USER_SITES_SCRIPT_ID = 'user-allowlist-sites'
+const syncUserSiteScripts = async () => {
+  try {
+    const { siteAllowlist } = await chrome.storage.local.get({ siteAllowlist: DEFAULT_SITE_ALLOWLIST })
+    const wanted = extraAllowlistPatterns(mergeDefaultSiteAllowlist(siteAllowlist))
+    const granted: string[] = []
+    for (const pattern of wanted) {
+      if (await chrome.permissions.contains({ origins: [pattern] })) granted.push(pattern)
     }
+    const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [USER_SITES_SCRIPT_ID] })
+    if (existing.length) await chrome.scripting.unregisterContentScripts({ ids: [USER_SITES_SCRIPT_ID] })
+    if (!granted.length) return
+    const scripts = chrome.runtime.getManifest().content_scripts || []
+    await chrome.scripting.registerContentScripts([{
+      id: USER_SITES_SCRIPT_ID,
+      matches: granted,
+      js: scripts.flatMap((c) => c.js || []),
+      css: scripts.flatMap((c) => c.css || []),
+      runAt: 'document_end',
+    }])
+  } catch (e) {
+    console.error('[bg] could not register user-site scripts', e)
   }
-
-  if (item.menuItemId === 'clip_markdown_menu') {
-    if (tab && tab.id != null) {
-      chrome.tabs.sendMessage(tab.id, { type: 'clipPageAsMarkdown' }, async (response) => {
-        if (chrome.runtime.lastError) {
-          console.error('[bg] clip markdown failed', chrome.runtime.lastError.message)
-          return
-        }
-        if (!response?.ok) {
-          console.error('[bg] clip markdown failed', response?.error || 'unknown error')
-          return
-        }
-        // mode 'obsidian' means the content script already sent it to the
-        // configured vault folder — only 'download' needs a file save here.
-        if (response.mode === 'download') {
-          try {
-            await triggerMarkdownDownload(response.title, response.markdown)
-          } catch (e) {
-            console.error('[bg] markdown download failed', e)
-          }
-        }
-      })
-    }
-  }
-});
+}
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.siteAllowlist) syncUserSiteScripts()
+})
+chrome.permissions.onAdded.addListener(() => syncUserSiteScripts())
+chrome.permissions.onRemoved.addListener(() => syncUserSiteScripts())
 
 // Strip the `Origin` header from requests to local Ollama (port 11434) so the
 // service doesn't return 403 when OLLAMA_ORIGINS isn't configured.
@@ -200,12 +223,14 @@ const ensureContextMenus = () => {
 chrome.runtime.onStartup.addListener(() => {
   ensureContextMenus();
   ensureOllamaDnrRule();
+  syncUserSiteScripts();
 });
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   ensureContextMenus();
   ensureOllamaDnrRule();
-  if (['install', 'update'].includes(details.reason)) {
+  syncUserSiteScripts();
+  if (details.reason === 'install') {   // not on every update: a new tab each release is a nuisance
     let url = chrome.runtime.getURL("options.html");
     await chrome.tabs.create({ url });
     // Keep the uninstall survey snippet here for possible future reuse,

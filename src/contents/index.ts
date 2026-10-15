@@ -1,25 +1,46 @@
-import { AI_PRESETS } from './ai-presets'
+import { AI_PRESETS } from './ui/ai-presets'
 import { extractArticle, extractArticleTextForAI } from './lib/extract'
 import { getContentWindow } from './lib/iframe'
-import { mountSummaryBall, unmountSummaryBall } from './summary-ball'
-import { showAiPanel } from './summary-panel'
-import { mountSelfCiteBall, unmountSelfCiteBall } from './self-cite-panel'
+import { mountSummaryBall, unmountSummaryBall } from './ui/summary-ball'
+import { showAiPanel } from './ui/summary-panel'
+import { mountSelfCiteBall, unmountSelfCiteBall } from './ui/self-cite-panel'
 import { DEFAULT_SITE_ALLOWLIST, isHostAllowed, mergeDefaultSiteAllowlist } from '../shared/site-access'
 import { clipCurrentMediumArticleAsMarkdown } from './markdown/medium-to-markdown'
 import { getStorage, OBSIDIAN_SETTINGS_DEFAULTS, sendClipToObsidian } from '../shared/obsidian-clip'
 import type { PlasmoCSConfig } from "plasmo"
 
+// Registered up front only for the default site allowlist (keep in sync with
+// DEFAULT_SITE_ALLOWLIST; Plasmo needs a literal here). Sites the user adds are
+// registered at runtime by the background worker, and on any other page the
+// script is injected when the user clicks the menu, shortcut or popup button
+// (see shared/injection.ts). A "*." pattern also matches the bare domain.
 export const config: PlasmoCSConfig = {
   matches: [
-    "http://*/*",
-    "https://*/*"
+    "https://*.medium.com/*",
+    "https://*.inoreader.com/*",
+    "https://*.innoreader.com/*",
+    "https://*.itnext.io/*",
+    "https://*.uxdesign.cc/*",
+    "https://*.gopubby.com/*",
+    "https://*.towardsai.net/*",
+    "https://*.bettermarketing.pub/*",
+    "https://*.writingcooperative.com/*"
   ],
   run_at: "document_end",
 }
 
-if (window === getContentWindow()) {
+// A second copy (e.g. two quick clicks racing the ping) must not double up.
+const alreadyLoaded = (window as any).__mediumEnhancerLoaded === true
+;(window as any).__mediumEnhancerLoaded = true
+
+if (window === getContentWindow() && !alreadyLoaded) {
   chrome.runtime.onMessage.addListener(
     (request: any, sender, sendResponse) => {
+      // Lets shared/injection.ts see that this tab already has the script.
+      if (typeof request === 'object' && request?.type === 'me-ping') {
+        sendResponse({ ok: true })
+        return
+      }
       if (typeof request === 'object' && request?.type === 'showSummaryPanel') {
         try {
           const article = extractArticle()
@@ -51,7 +72,7 @@ if (window === getContentWindow()) {
             const settings = await getStorage(OBSIDIAN_SETTINGS_DEFAULTS)
             if (settings.obsidianClipperEnabled) {
               const result = await sendClipToObsidian(clip)
-              if (!result.ok) throw new Error(result.error)
+              if (result.ok === false) throw new Error(result.error)
               sendResponse({ ok: true, mode: 'obsidian', filepath: result.filepath })
             } else {
               sendResponse({ ok: true, mode: 'download', markdown: clip.markdown, title: clip.title })

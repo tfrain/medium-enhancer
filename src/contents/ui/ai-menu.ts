@@ -2,10 +2,10 @@
 // Offers preset actions and a free-text custom prompt.
 
 import { AI_PRESETS } from './ai-presets'
-import { extractArticle, extractArticleTextForAI } from './lib/extract'
-import { clipCurrentMediumArticleAsMarkdown } from './markdown/medium-to-markdown'
+import { extractArticle, extractArticleTextForAI } from '../lib/extract'
+import { clipCurrentMediumArticleAsMarkdown } from '../markdown/medium-to-markdown'
 import { showAiPanel } from './summary-panel'
-import { showToast } from './util/toast'
+import { showToast } from '../util/toast'
 
 const MENU_ID = '__me_ai_menu__'
 
