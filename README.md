@@ -8,7 +8,16 @@ Medium Enhancer is a browser extension that turns any long-form article page int
 - **Markdown Export**: Turn the current article into clean Markdown from the right-click AI menu.
 - **Obsidian Clipper**: Send the current article straight into your Obsidian vault via the Advanced Obsidian URI plugin — one click, no copy-paste.
 - **RSS Feed Discovery**: Find and subscribe to RSS feeds for Medium articles, authors, and publications.
+- **Cite My Story** (for Medium writers): While editing a draft, list your own past stories ranked by relevance to the draft title, and copy a link that Medium turns into an embed card.
 - **Keyboard Shortcut**: Trigger AI summarize with `Ctrl/Cmd+Shift+S` — remappable at `chrome://extensions/shortcuts`.
+
+## Permissions
+- Runs automatically only on Medium and its publications (and Inoreader). On any other page it runs only when you click the menu, press the shortcut, or use the popup.
+- Sites you add in Options are asked for when you save them.
+- Network requests go only to the page you are on, your Ollama server, or the AI provider you chose.
+
+## Privacy
+See [PRIVACY.md](PRIVACY.md). In short: nothing is collected by the developer. If you choose OpenAI or Anthropic, the article text you summarize is sent to that provider with your own API key.
 
 ## Installation
 1. Install from the Chrome Web Store (link coming soon)
