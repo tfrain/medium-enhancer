@@ -18,13 +18,6 @@ export const AI_PRESETS: AiPreset[] = [
       'You are a helpful reading assistant. Summarize the following article clearly and concisely in the SAME language as the article. Use short bullet points for key ideas, and end with a one-sentence takeaway.',
   },
   {
-    id: 'comment',
-    label: 'Write a comment',
-    // Translated from: "我想给这个文章留言，你通读全文，给我一个好的评论"
-    instruction:
-      "I want to leave a comment on this article. Read the full text carefully, then craft a thoughtful, substantive comment (3-6 sentences) that adds genuine value to the discussion — for example by sharing a relevant insight, raising a good-faith question, or building on the author's argument. Be respectful and specific; avoid generic praise. Respond in the SAME language as the article.",
-  },
-  {
     id: 'explain-comment',
     label: 'Explain selected comment',
     requiresSelection: true,

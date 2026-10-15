@@ -17,7 +17,6 @@ export const DEFAULT_SITE_ALLOWLIST = [
   '*.bettermarketing.pub',
   'writingcooperative.com',
   '*.writingcooperative.com',
-  'medium.programmerscareer.com',
 ]
 
 export const parseSiteAllowlist = (value: string | string[] | undefined): string[] => {
