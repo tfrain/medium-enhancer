@@ -45,7 +45,7 @@ export const renderObsidianPathTemplate = (template: string, clip: ClipForObsidi
 }
 
 export const OBSIDIAN_SETTINGS_DEFAULTS = {
-  obsidianClipperEnabled: true,
+  obsidianClipperEnabled: false,   // most users have no Obsidian: default to a .md download
   obsidianVault: '',
   obsidianFolder: 'clippers',
   obsidianPathTemplate: '',

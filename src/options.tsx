@@ -28,7 +28,9 @@ const CAPABILITIES: Capability[] = [
 ];
 
 const BOOL_DEFAULTS: Record<string, boolean> = CAPABILITIES.reduce((acc, c) => {
-	acc[c.key] = true;
+	// Save to Obsidian is opt-in: without Obsidian and the Advanced URI plugin
+	// the export would go nowhere.
+	acc[c.key] = c.key !== "obsidianClipperEnabled";
 	return acc;
 }, {} as Record<string, boolean>);
 
