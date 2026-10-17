@@ -15,7 +15,7 @@
 // shortage, not a wording problem.
 
 import {
-  fetchTopEarners,
+  fetchAllStories,
   fetchViewerUsername,
   getCurrentDraftTitle,
   isMediumEditorPage,
@@ -265,7 +265,7 @@ const openPanel = async () => {
   try {
     username = await fetchViewerUsername()
     if (!isCurrent()) return
-    const pool = await fetchTopEarners(username, 20)
+    const pool = await fetchAllStories(username)
     if (!isCurrent()) return
     const ranked: RankedPost[] = pool
       .map(p => ({ ...p, relevance: scoreRelevance(draftTitle, p.title) }))

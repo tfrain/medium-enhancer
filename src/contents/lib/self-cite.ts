@@ -29,6 +29,7 @@ const QUERY = `query UserLifetimeStoryStatsPostsQuery($username: ID!, $first: In
           collection { name }
         }
       }
+      pageInfo { endCursor hasNextPage }
     }
   }
 }`
@@ -134,50 +135,65 @@ export const fetchViewerUsername = async (): Promise<string> => {
   return username
 }
 
-export const fetchTopEarners = async (username: string, limit = 5): Promise<SelfCitePost[]> => {
+const PAGE_SIZE = 50
+const MAX_PAGES = 10 // 500 stories: enough for nearly every writer, bounded for the rest
+
+// Every published story, not just the top earners: the first version pulled
+// only the top 20 by earnings, so an on-topic story that earned little could
+// never be suggested (2026-10-18: a draft about Stats Insights 1.2 found
+// nothing, although the 1.1.2 post exists).
+export const fetchAllStories = async (username: string): Promise<SelfCitePost[]> => {
   if (cache && cache.username === username && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
-    return cache.posts.slice(0, limit)
+    return cache.posts.slice()
   }
 
-  const body = [
-    {
-      operationName: 'UserLifetimeStoryStatsPostsQuery',
-      variables: {
-        username,
-        first: 20,
-        after: '',
-        orderBy: { lifetimeEarnings: 'DESC' },
-        filter: { published: true },
-      },
-      query: QUERY,
-    },
-  ]
+  const posts: SelfCitePost[] = []
+  const seen = new Set<string>()
+  let after = ''
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const res = await fetch(GRAPHQL_URL, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify([{
+        operationName: 'UserLifetimeStoryStatsPostsQuery',
+        variables: {
+          username,
+          first: PAGE_SIZE,
+          after,
+          orderBy: { lifetimeEarnings: 'DESC' },
+          filter: { published: true },
+        },
+        query: QUERY,
+      }]),
+    })
+    if (!res.ok) throw new Error(`self-cite: GraphQL request failed (${res.status})`)
 
-  const res = await fetch(GRAPHQL_URL, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`self-cite: GraphQL request failed (${res.status})`)
-
-  const json = await res.json()
-  const user = graphqlData(json).user
-  if (!user?.postsConnection) throw new Error('Medium could not load your stories. Sign in to Medium and try again.')
-  const edges = user.postsConnection.edges ?? []
-  const posts: SelfCitePost[] = edges.map((edge: any) => {
-    const n = edge.node
-    const earn = n?.earnings?.total ?? { units: 0, nanos: 0 }
-    return {
-      title: n?.title ?? '(untitled)',
-      url: n?.mediumUrl ?? '',
-      publication: n?.collection?.name ?? null,
-      revenueUsd: (earn.units ?? 0) + (earn.nanos ?? 0) / 1e9,
-      firstPublishedAt: n?.firstPublishedAt ?? 0,
+    const user = graphqlData(await res.json()).user
+    if (!user?.postsConnection) throw new Error('Medium could not load your stories. Sign in to Medium and try again.')
+    for (const edge of user.postsConnection.edges ?? []) {
+      const n = edge?.node
+      const url = n?.mediumUrl ?? ''
+      if (!url || seen.has(url)) continue
+      seen.add(url)
+      const earn = n?.earnings?.total ?? { units: 0, nanos: 0 }
+      posts.push({
+        title: n?.title ?? '(untitled)',
+        url,
+        publication: n?.collection?.name ?? null,
+        revenueUsd: (earn.units ?? 0) + (earn.nanos ?? 0) / 1e9,
+        firstPublishedAt: n?.firstPublishedAt ?? 0,
+      })
     }
-  }).filter((p: SelfCitePost) => p.url)
+    const info = user.postsConnection.pageInfo
+    if (!info?.hasNextPage || !info.endCursor) break
+    after = info.endCursor
+  }
 
   posts.sort((a, b) => b.revenueUsd - a.revenueUsd)
   cache = { username, posts, fetchedAt: Date.now() }
-  return posts.slice(0, limit)
+  return posts.slice()
 }
+
+export const fetchTopEarners = async (username: string, limit = 5): Promise<SelfCitePost[]> =>
+  (await fetchAllStories(username)).slice(0, limit)
