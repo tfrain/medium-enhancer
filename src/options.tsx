@@ -532,7 +532,7 @@ const Options = () => {
 
 			<footer className="opt-foot">
 				Medium Enhancer v{version} ·{" "}
-				<a href="https://t.me/tfrain_w" target="_blank" rel="noopener">Feedback</a> ·{" "}
+				<a href="https://medium.com/programmers-career/display-medium-toc-and-rss-feeds-medium-enhancer-f06012a2780c" target="_blank" rel="noopener">Feedback</a> ·{" "}
 				by <a href="https://wesley-wei.medium.com/" target="_blank" rel="noopener">Wesley Wei</a>
 			</footer>
 

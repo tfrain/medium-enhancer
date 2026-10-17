@@ -1,7 +1,7 @@
 {
   "name": "medium-enhancer",
   "displayName": "Medium Enhancer",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "AI summaries with Ollama or your own OpenAI/Anthropic key, Markdown and Obsidian export, and RSS feeds for Medium articles.",
   "author": "Wesley Wei",
   "scripts": {

@@ -176,8 +176,8 @@ function IndexPopup() {
         </a>
         <br />
         Feedback:&nbsp;
-        <a href="https://t.me/tfrain_w" target="_blank" rel="noopener noreferrer">
-          Telegram
+        <a href="https://medium.com/programmers-career/display-medium-toc-and-rss-feeds-medium-enhancer-f06012a2780c" target="_blank" rel="noopener noreferrer">
+          comment on this article
         </a>
       </footer>
     </div>
