@@ -1,4 +1,5 @@
 import { OBSIDIAN_SENT_MESSAGE } from "./shared/obsidian-clip"
+import { ARTICLE_URL } from "./shared/whats-new"
 import { classifyMediumUrl } from "./shared/medium-url"
 import "./popup.css"
 import { useState, useEffect } from "react"
@@ -187,7 +188,7 @@ function IndexPopup() {
         </a>
         <br />
         Feedback:&nbsp;
-        <a href="https://medium.com/programmers-career/display-medium-toc-and-rss-feeds-medium-enhancer-f06012a2780c" target="_blank" rel="noopener noreferrer">
+        <a href={ARTICLE_URL} target="_blank" rel="noopener noreferrer">
           comment on this article
         </a>
       </footer>

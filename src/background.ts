@@ -1,3 +1,4 @@
+import { ARTICLE_URL, shouldOpenArticleOnUpdate } from "./shared/whats-new"
 import { getAiConfig, readAiSettings } from "./shared/ai-defaults"
 import { readStreamLines } from "./shared/stream-lines"
 import { classifyMediumUrl, isMediumHost, isKnownMediumPublicationHost, mediumPathParts, reservedMediumPaths } from "./shared/medium-url"
@@ -210,9 +211,13 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.runtime.onInstalled.addListener(async (details) => {
   ensureContextMenus();
   ensureOllamaDnrRule();
-  if (details.reason === 'install') {   // not on every update: a new tab each release is a nuisance
+  // Set on every install/update so people who installed before this existed get it too.
+  chrome.runtime.setUninstallURL?.(ARTICLE_URL);
+  if (details.reason === 'install') {
     let url = chrome.runtime.getURL("options.html");
     await chrome.tabs.create({ url });
+  } else if (shouldOpenArticleOnUpdate(details, chrome.runtime.getManifest().version)) {
+    await chrome.tabs.create({ url: ARTICLE_URL });
   }
 });
 
