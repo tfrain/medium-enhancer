@@ -34,6 +34,16 @@ const QUERY = `query UserLifetimeStoryStatsPostsQuery($username: ID!, $first: In
   }
 }`
 
+// The story being edited (/p/<id>/edit) is not something to cite inside itself.
+export const editingPostId = (pathname: string): string | null =>
+  pathname.match(/^\/p\/([a-f0-9]+)\/edit\/?$/)?.[1] ?? null
+
+export const isSamePost = (url: string, postId: string | null): boolean => {
+  if (!postId) return false
+  const path = url.split(/[?#]/)[0].replace(/\/+$/, '')
+  return path.endsWith('-' + postId) || path.endsWith('/' + postId)
+}
+
 const isEditorPathname = (pathname: string): boolean =>
   /^\/p\/[a-f0-9]+\/edit\/?$/.test(pathname) || pathname.startsWith('/new-story')
 

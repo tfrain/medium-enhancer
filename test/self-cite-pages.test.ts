@@ -26,3 +26,20 @@ try {
   console.error("FAIL Cite My Story paging:", error)
   process.exit(1)
 }
+
+// The story being edited must not be suggested to itself.
+import("../src/contents/lib/self-cite.ts").then(({ editingPostId, isSamePost }) => {
+  try {
+    const id = editingPostId("/p/e5f2a1b3c4d6/edit")
+    assert.equal(id, "e5f2a1b3c4d6")
+    assert.equal(editingPostId("/new-story"), null)
+    assert.ok(isSamePost("https://medium.com/programmers-career/your-bash-script-sorts-e5f2a1b3c4d6?source=x", id))
+    assert.ok(isSamePost("https://medium.com/p/e5f2a1b3c4d6", id))
+    assert.ok(!isSamePost("https://medium.com/programmers-career/other-story-0123456789ab", id))
+    assert.ok(!isSamePost("https://medium.com/p/e5f2a1b3c4d6", null))
+    console.log("PASS Cite My Story leaves out the story being edited")
+  } catch (error) {
+    console.error("FAIL Cite My Story self-exclusion:", error)
+    process.exit(1)
+  }
+})

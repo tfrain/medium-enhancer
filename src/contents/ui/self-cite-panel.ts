@@ -16,6 +16,8 @@
 
 import {
   fetchAllStories,
+  editingPostId,
+  isSamePost,
   fetchViewerUsername,
   getCurrentDraftTitle,
   isMediumEditorPage,
@@ -267,7 +269,9 @@ const openPanel = async () => {
     if (!isCurrent()) return
     const pool = await fetchAllStories(username)
     if (!isCurrent()) return
+    const selfId = editingPostId(new URL(url).pathname)
     const ranked: RankedPost[] = pool
+      .filter(p => !isSamePost(p.url, selfId))
       .map(p => ({ ...p, relevance: scoreRelevance(draftTitle, p.title) }))
       .sort((a, b) => b.relevance - a.relevance || b.revenueUsd - a.revenueUsd)
       .slice(0, 6)
