@@ -1,6 +1,5 @@
-// Used by contents/index.ts for "Convert Page to Markdown": with "Save to
-// Obsidian" on, the clipped article goes to the configured vault folder
-// (default "clippers").
+// Obsidian is an optional, explicit export target alongside Markdown download.
+export const OBSIDIAN_SENT_MESSAGE = 'Sent to Obsidian. If no note appears, check that Obsidian and its Advanced URI plugin are installed, or use Convert Page to Markdown to download the file.'
 
 export type ClipForObsidian = {
   title: string

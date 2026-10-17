@@ -1,3 +1,7 @@
+import { getAiConfig, readAiSettings } from "./shared/ai-defaults"
+import { readStreamLines } from "./shared/stream-lines"
+import { classifyMediumUrl, isMediumHost, isKnownMediumPublicationHost, mediumPathParts, reservedMediumPaths } from "./shared/medium-url"
+import { OBSIDIAN_SENT_MESSAGE } from "./shared/obsidian-clip"
 import { createObsidianAdvancedUri } from "./shared/obsidian-uri"
 import { triggerMarkdownDownload } from "./shared/markdown-download"
 import { sendToTab } from "./shared/injection"
@@ -121,22 +125,20 @@ chrome.contextMenus.onClicked.addListener(async (item, tab) => {
   if (item.menuItemId === 'summarize_menu') {
     await sendToTab(tab.id, { type: 'showSummaryPanel' }).catch((e) => console.warn('[bg] cannot run on this page', e))
   }
-  if (item.menuItemId === 'clip_markdown_menu') {
-    const response: any = await sendToTab(tab.id, { type: 'clipPageAsMarkdown' })
-      .catch((e) => { console.warn('[bg] cannot run on this page', e); return undefined })
-    if (!response?.ok) {
-      if (response) console.error('[bg] clip markdown failed', response.error || 'unknown error')
-      return
+  if (item.menuItemId === 'clip_markdown_menu' || item.menuItemId === 'clip_obsidian_menu') {
+    const target = item.menuItemId === 'clip_obsidian_menu' ? 'obsidian' : 'download'
+    let text: string
+    try {
+      const response: any = await sendToTab(tab.id, { type: 'clipPageAsMarkdown', target })
+      if (!response?.ok) throw new Error(response?.error || 'Could not read this page.')
+      if (target === 'download') await triggerMarkdownDownload(response.title, response.markdown)
+      text = target === 'download' ? 'Saved to your Downloads folder' : OBSIDIAN_SENT_MESSAGE
+    } catch (error) {
+      text = (error as Error).message || String(error)
+      console.error('[bg] export failed', error)
     }
-    // mode 'obsidian' means the content script already sent it to the
-    // configured vault folder; only 'download' needs a file save here.
-    if (response.mode === 'download') {
-      try {
-        await triggerMarkdownDownload(response.title, response.markdown)
-      } catch (e) {
-        console.error('[bg] markdown download failed', e)
-      }
-    }
+    await chrome.tabs.sendMessage(tab.id, { type: 'showExportToast', text })
+      .catch(error => console.warn('[bg] cannot show export feedback on this page', error))
   }
 })
 
@@ -172,29 +174,32 @@ const ensureOllamaDnrRule = async () => {
 };
 
 // "Summarize with AI" is shown only while AI Summary is on in Options.
-const ensureContextMenus = async () => {
-  const { aiSummaryEnabled } = await chrome.storage.local.get({ aiSummaryEnabled: true })
-  chrome.contextMenus.removeAll(() => {
-    if (aiSummaryEnabled) {
-      chrome.contextMenus.create({
-        id: "summarize_menu",
-        title: "Summarize with AI",
-        type: 'normal',
-        contexts: ["page", "selection"],
-      });
-    }
-    // Works on any page, and only ever runs when the user clicks it.
+let menuUpdate = Promise.resolve()
+const ensureContextMenus = () => menuUpdate = menuUpdate.catch(() => {}).then(async () => {
+  const { aiSummaryEnabled, obsidianClipperEnabled } = await chrome.storage.local.get({ aiSummaryEnabled: true, obsidianClipperEnabled: false })
+  await chrome.contextMenus.removeAll()
+  if (aiSummaryEnabled) {
     chrome.contextMenus.create({
-      id: "clip_markdown_menu",
-      title: "Convert Page to Markdown",
+      id: "summarize_menu",
+      title: "Summarize with AI",
       type: 'normal',
-      contexts: ["page"],
+      contexts: ["page", "selection"],
     });
+  }
+  // Works on any page, and only ever runs when the user clicks it.
+  chrome.contextMenus.create({
+    id: "clip_markdown_menu",
+    title: "Convert Page to Markdown",
+    type: 'normal',
+    contexts: ["page"],
   });
-};
+  if (obsidianClipperEnabled) chrome.contextMenus.create({
+    id: 'clip_obsidian_menu', title: 'Send to Obsidian', contexts: ['page'],
+  })
+});
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.aiSummaryEnabled) ensureContextMenus()
+  if (area === 'local' && (changes.aiSummaryEnabled || changes.obsidianClipperEnabled)) ensureContextMenus()
 })
 
 chrome.runtime.onStartup.addListener(() => {
@@ -208,15 +213,6 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {   // not on every update: a new tab each release is a nuisance
     let url = chrome.runtime.getURL("options.html");
     await chrome.tabs.create({ url });
-    // Keep the uninstall survey snippet here for possible future reuse,
-    // but disable it for now.
-    //
-    // const feedbackFormId =
-    //   '1FAIpQLSdwZSYMRBXmb3BU1lIm7LC5e8OZxYQFg_F2phvvAf0X-zhIDQ';
-    // const feedbackFormUrl = `https://docs.google.com/forms/d/e/${feedbackFormId}/viewform`;
-    // if (chrome.runtime.setUninstallURL) {
-    //   chrome.runtime.setUninstallURL(feedbackFormUrl);
-    // }
   }
 });
 
@@ -242,49 +238,8 @@ const generateFeeds = (
 // Track the last URL per tab to prevent duplicate processing
 const lastUrlByTab = new Map<number, string>()
 
-// Treat medium.com and any *.medium.com (e.g. <user>.medium.com publications) as
-// known-Medium hosts where it is safe to apply feed-shape fallbacks.
-const isMediumHost = (hostname: string) => /(^|\.)medium\.com$/i.test(hostname)
-
-const knownMediumPublicationHosts = new Set([
-  'ai.gopubby.com',
-  'bettermarketing.pub',
-  'itnext.io',
-  'pub.towardsai.net',
-  'uxdesign.cc',
-  'writingcooperative.com',
-])
-
-const isKnownMediumPublicationHost = (hostname: string) =>
-  knownMediumPublicationHosts.has(String(hostname || '').toLowerCase())
-
+const feedVersionByTab = new Map<number, number>()
 const stripScheme = (u: string) => u.replace(/^https?:\/\//, '').replace(/\/$/, '')
-
-const reservedMediumPaths = new Set([
-  'about',
-  'creators',
-  'explore',
-  'jobs',
-  'm',
-  'me',
-  'membership',
-  'new-story',
-  'p',
-  'search',
-  'signin',
-  'tag',
-  'topic',
-])
-
-const mediumPathParts = (url: string) => {
-  try {
-    return new URL(url).pathname.split('/').filter(Boolean)
-  } catch {
-    return []
-  }
-}
-
-const isMediumArticleUrl = (url: string) => /-[0-9a-z]{10,}(?:[/?#]|$)/i.test(url)
 
 const isLoggedInMediumViewerLink = (url: string) => {
   try {
@@ -317,26 +272,14 @@ const bestAuthorFeed = (links: AuthorProfileLink[]): string | null => {
   return candidates[0]?.feed ?? null
 }
 
-const isMediumProfileOrPublicationUrl = (url: string) => {
-  try {
-    const u = new URL(url)
-    if (!isMediumHost(u.hostname)) return false
-    const parts = mediumPathParts(url)
-    if (parts.length === 1 && parts[0].startsWith('@')) return true
-    if (u.hostname !== 'medium.com' && parts.length === 0) return true
-    return (
-      u.hostname === 'medium.com' &&
-      parts.length === 1 &&
-      !parts[0].startsWith('@') &&
-      !reservedMediumPaths.has(parts[0].toLowerCase())
-    )
-  } catch {
-    return false
-  }
-}
-
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url && tab.url !== lastUrlByTab.get(tabId)) {
+  if (changeInfo.url || changeInfo.status === 'loading') {
+    feedVersionByTab.set(tabId, (feedVersionByTab.get(tabId) || 0) + 1)
+    lastUrlByTab.delete(tabId)
+    chrome.action.setBadgeText({ text: '', tabId })
+    chrome.storage.local.remove(`feeds_${tabId}`)
+  }
+  if ((changeInfo.status === 'complete' || (changeInfo.url && tab.status === 'complete')) && tab.url && tab.url !== lastUrlByTab.get(tabId)) {
     lastUrlByTab.set(tabId, tab.url)
 
     // Reset per-tab state for the new URL. We'll repopulate below if we find
@@ -344,9 +287,17 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     chrome.action.setBadgeText({ text: '', tabId: tabId })
     chrome.storage.local.remove(`feeds_${tabId}`)
 
-    if (!isMediumArticleUrl(tab.url) && !isMediumProfileOrPublicationUrl(tab.url)) return
+    if (!classifyMediumUrl(tab.url)) return
+    const url = tab.url
+    const version = feedVersionByTab.get(tabId) || 0
+    const isCurrent = async () => {
+      if ((feedVersionByTab.get(tabId) || 0) !== version) return false
+      const current = await chrome.tabs.get(tabId).catch(() => null)
+      return current?.url === url && (feedVersionByTab.get(tabId) || 0) === version
+    }
 
-    setTimeout(() => {
+    setTimeout(async () => {
+      if (!await isCurrent()) return
       chrome.scripting.executeScript({
         target: { tabId: tabId },
         func: () => {
@@ -385,7 +336,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
           return { alternateFeedLinks, anchorFeedLinks, authorProfileLinks }
         },
       },
-        (results) => {
+        async (results) => {
+          if (chrome.runtime.lastError || !await isCurrent()) return
           if (!results || !results[0] || !results[0].result) return
           const { alternateFeedLinks, anchorFeedLinks, authorProfileLinks } = results[0].result as {
             alternateFeedLinks: string[]
@@ -457,7 +409,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             }
           }
 
-          if (feeds.length > 0) {
+          if (feeds.length > 0 && await isCurrent()) {
             chrome.action.setBadgeText({ text: feeds.length.toString(), tabId: tabId })
             chrome.action.setBadgeBackgroundColor({ color: '#070707', tabId: tabId })
             chrome.storage.local.set({ [`feeds_${tabId}`]: feeds })
@@ -471,6 +423,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 // Clean up per-tab state when a tab closes
 chrome.tabs.onRemoved.addListener((tabId) => {
   lastUrlByTab.delete(tabId)
+  feedVersionByTab.delete(tabId)
   chrome.storage.local.remove(`feeds_${tabId}`)
 })
 
@@ -501,7 +454,6 @@ type SummarizeMsg = {
   baseUrl: string
   model: string
   provider?: 'ollama' | 'openai' | 'anthropic'
-  apiKey?: string
 }
 
 // Parse a single SSE `data: {...}` line into the delta text for the given
@@ -559,31 +511,21 @@ const runCloudStream = async (
     try { port.disconnect() } catch {}
     return
   }
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    let idx: number
-    while ((idx = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, idx).trim()
-      buffer = buffer.slice(idx + 1)
-      if (!line) continue
-      const parsed = extractCloudDelta(provider, line)
-      if (!parsed) continue
-      if (parsed.error) {
-        port.postMessage({ type: 'error', error: parsed.error })
-        try { port.disconnect() } catch {}
-        return
-      }
-      if (parsed.text) port.postMessage({ type: 'chunk', chunk: parsed.text })
-      if (parsed.done) {
-        port.postMessage({ type: 'done' })
-        try { port.disconnect() } catch {}
-        return
-      }
+  for await (const rawLine of readStreamLines(res.body)) {
+    const line = rawLine.trim()
+    if (!line) continue
+    const parsed = extractCloudDelta(provider, line)
+    if (!parsed) continue
+    if (parsed.error) {
+      port.postMessage({ type: 'error', error: parsed.error })
+      try { port.disconnect() } catch {}
+      return
+    }
+    if (parsed.text) port.postMessage({ type: 'chunk', chunk: parsed.text })
+    if (parsed.done) {
+      port.postMessage({ type: 'done' })
+      try { port.disconnect() } catch {}
+      return
     }
   }
   port.postMessage({ type: 'done' })
@@ -601,7 +543,10 @@ chrome.runtime.onConnect.addListener((port) => {
   })
 
   port.onMessage.addListener(async (msg: SummarizeMsg) => {
-    const { instruction, title, text, context, baseUrl, model, provider = 'ollama', apiKey } = msg
+    const { instruction, title, text, context, baseUrl, provider = 'ollama' } = msg
+    const settings = await readAiSettings()
+    if (closed) return
+    const { apiKey, model } = getAiConfig(settings, provider)
     if (!text || !text.trim()) {
       port.postMessage({ type: 'error', error: 'No article text found on this page.' })
       try { port.disconnect() } catch {}
@@ -649,36 +594,27 @@ chrome.runtime.onConnect.addListener((port) => {
         try { port.disconnect() } catch {}
         return
       }
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      while (!closed) {
-        const { value, done } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        let idx: number
-        while ((idx = buffer.indexOf('\n')) >= 0) {
-          const line = buffer.slice(0, idx).trim()
-          buffer = buffer.slice(idx + 1)
-          if (!line) continue
-          try {
-            const json = JSON.parse(line)
-            if (json.response) {
-              port.postMessage({ type: 'chunk', chunk: json.response })
-            }
-            if (json.done) {
-              port.postMessage({ type: 'done' })
-              try { port.disconnect() } catch {}
-              return
-            }
-            if (json.error) {
-              port.postMessage({ type: 'error', error: String(json.error) })
-              try { port.disconnect() } catch {}
-              return
-            }
-          } catch {
-            // skip malformed line
+      for await (const rawLine of readStreamLines(res.body)) {
+        if (closed) return
+        const line = rawLine.trim()
+        if (!line) continue
+        try {
+          const json = JSON.parse(line)
+          if (json.response) {
+            port.postMessage({ type: 'chunk', chunk: json.response })
           }
+          if (json.done) {
+            port.postMessage({ type: 'done' })
+            try { port.disconnect() } catch {}
+            return
+          }
+          if (json.error) {
+            port.postMessage({ type: 'error', error: String(json.error) })
+            try { port.disconnect() } catch {}
+            return
+          }
+        } catch {
+          // skip malformed line
         }
       }
       port.postMessage({ type: 'done' })

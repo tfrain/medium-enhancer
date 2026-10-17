@@ -1,10 +1,10 @@
+import { showToast } from './util/toast'
 import { AI_PRESETS } from './ui/ai-presets'
 import { extractArticle, extractArticleTextForAI } from './lib/extract'
-import { getContentWindow } from './lib/iframe'
 import { showAiPanel } from './ui/summary-panel'
 import { mountSelfCiteBall, unmountSelfCiteBall } from './ui/self-cite-panel'
 import { clipCurrentMediumArticleAsMarkdown } from './markdown/medium-to-markdown'
-import { getStorage, OBSIDIAN_SETTINGS_DEFAULTS, sendClipToObsidian } from '../shared/obsidian-clip'
+import { sendClipToObsidian } from '../shared/obsidian-clip'
 import type { PlasmoCSConfig } from "plasmo"
 
 // Runs on its own only on Medium, for the Cite My Story button in the editor.
@@ -19,7 +19,7 @@ export const config: PlasmoCSConfig = {
 const alreadyLoaded = (window as any).__mediumEnhancerLoaded === true
 ;(window as any).__mediumEnhancerLoaded = true
 
-if (window === getContentWindow() && !alreadyLoaded) {
+if (window === window.top && !alreadyLoaded) {
   chrome.runtime.onMessage.addListener(
     (request: any, sender, sendResponse) => {
       // Lets shared/injection.ts see that this tab already has the script.
@@ -44,16 +44,18 @@ if (window === getContentWindow() && !alreadyLoaded) {
         }
       }
 
-      // Explicit-click-only: fired by the "Convert Page to Markdown" context
-      // menu item or the popup button, never on its own. With "Save to
-      // Obsidian" on it goes to the configured vault folder (default
-      // "clippers"); otherwise the background saves a .md file.
+      if (request?.type === 'showExportToast') {
+        showToast(String(request.text || ''))
+        sendResponse({ ok: true })
+        return
+      }
+
       if (typeof request === 'object' && request?.type === 'clipPageAsMarkdown') {
         (async () => {
           try {
             const clip = clipCurrentMediumArticleAsMarkdown()
-            const settings = await getStorage(OBSIDIAN_SETTINGS_DEFAULTS)
-            if (settings.obsidianClipperEnabled) {
+            if (request.target !== 'download' && request.target !== 'obsidian') throw new Error('Unknown export target.')
+            if (request.target === 'obsidian') {
               const result = await sendClipToObsidian(clip)
               if (result.ok === false) throw new Error(result.error)
               sendResponse({ ok: true, mode: 'obsidian', filepath: result.filepath })
@@ -81,29 +83,31 @@ if (window === getContentWindow() && !alreadyLoaded) {
     selfCiteEnabled: true,
   }
 
-  chrome.storage.local.get(SETTINGS_DEFAULTS, function (items) {
-    applyFeaturesForCurrentSite(items)
-  });
+  let settingsVersion = 0
+  const loadFeatures = () => {
+    const version = ++settingsVersion
+    chrome.storage.local.get(SETTINGS_DEFAULTS, items => {
+      if (version === settingsVersion) applyFeaturesForCurrentSite(items)
+    })
+  }
+  loadFeatures()
 
-  // React to capability toggles from the options page without needing a reload
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local') return;
-    if (changes.selfCiteEnabled) {
-      chrome.storage.local.get(SETTINGS_DEFAULTS, function (items) {
-        applyFeaturesForCurrentSite(items)
-      });
-    }
-  });
+    if (area !== 'local' || !changes.selfCiteEnabled) return
+    // Invalidate pending settings reads and close immediately on disable.
+    settingsVersion++
+    applyFeaturesForCurrentSite({ selfCiteEnabled: changes.selfCiteEnabled.newValue ?? true })
+  })
 
-  // Medium is a client-side-routed SPA — this content script only runs once
-  // at document_end, so re-check the self-cite button's editor-page condition
-  // whenever the URL changes (e.g. navigating from a draft list into /edit).
-  let lastPath = window.location.pathname
-  window.setInterval(() => {
-    if (window.location.pathname === lastPath) return
-    lastPath = window.location.pathname
-    chrome.storage.local.get(SETTINGS_DEFAULTS, function (items) {
-      applyFeaturesForCurrentSite(items)
-    });
-  }, 1000)
+  // Re-check SPA navigation, including transitions between two editor drafts.
+  let lastUrl = window.location.href
+  const checkCurrentUrl = () => {
+    if (window.location.href === lastUrl) return
+    lastUrl = window.location.href
+    unmountSelfCiteBall()
+    loadFeatures()
+  }
+  window.addEventListener('popstate', checkCurrentUrl)
+  window.addEventListener('hashchange', checkCurrentUrl)
+  window.setInterval(checkCurrentUrl, 250)
 }

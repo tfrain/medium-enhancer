@@ -144,18 +144,10 @@ export const extractArticle = function (): HTMLElement | undefined {
   const isInoReader = dm.indexOf('inoreader.com') >= 0 || dm.indexOf('innoreader.com') > 0;
   const container = document.getElementById("root") as HTMLElement | null;
 
-  let selectorInoreader = '.article_content'
-  let selectorMedium = 'article'
-  let mediumArticle = container != null && document.querySelector(selectorMedium) as HTMLElement || null
+  const selectorInoreader = '.article_content'
+  const selectorMedium = 'article'
+  const mediumArticle = container != null && document.querySelector(selectorMedium) as HTMLElement || null
 
-
-  chrome.storage.local.get({
-    selectorInoreader: '.article_content',
-    selectorMedium: 'article'
-  }, function (items) {
-    selectorInoreader = items.selectorInoreader
-    selectorMedium = items.selectorMedium
-  });
 
   if (isInoReader || mediumArticle != null) {
     const articleClass = mediumArticle != null ? selectorMedium : selectorInoreader;

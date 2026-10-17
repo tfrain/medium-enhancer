@@ -1,3 +1,5 @@
+import { getAiConfig, readAiSettings } from "../../shared/ai-defaults"
+
 // In-page floating panel that streams an AI response from the background worker.
 // Used for the summary, comment explanations, and any custom user prompt.
 //
@@ -287,9 +289,6 @@ export type AiPanelRequest = {
   articleText: string
   articleTitle: string
   extraContext?: string
-  autoCopyPrimary?: boolean
-  autoCopyStatusText?: string
-  onPrimaryDone?: (text: string) => void | Promise<string | void> | string
 }
 
 type AiProviderConfig = {
@@ -357,7 +356,6 @@ const streamInto = (
       baseUrl: cfg.baseUrl,
       model: cfg.model,
       provider: cfg.provider,
-      apiKey: cfg.apiKey,
     })
   })
 }
@@ -367,143 +365,110 @@ const buildTranslateInstruction = (targetLanguage: string) =>
   'Preserve the original structure, bullet points, line breaks, and any markdown. ' +
   'Output ONLY the translation — do not add commentary, labels, or quotation marks around it.'
 
-export const showAiPanel = (req: AiPanelRequest) => {
+export const showAiPanel = async (req: AiPanelRequest) => {
   disposePanel()
 
-  chrome.storage.local.get(
-    {
-      ollamaBaseUrl: 'http://localhost:11434',
-      ollamaModel: '',
-      translationLanguage: '',   // off unless the user picks a language in Options
-      aiProvider: 'ollama',
-      aiApiKey: '',
-      aiCloudModel: '',
-    },
-    async (cfgRaw) => {
-      const translationLanguage: string = cfgRaw.translationLanguage ?? ''
-      current = buildPanel(req.headline, translationLanguage)
-      const panel = current
-      let runId = 0
-      const setStatus = (msg: string, isError = false) => {
-        if (!current) return
-        current.status.textContent = msg
-        current.status.classList.toggle('me-sum-error', isError)
-      }
-      const resetPanelContent = () => {
-        panel.bodyEn.classList.add('me-sum-pending')
-        panel.bodyEn.textContent = 'Waiting for response…'
-        if (panel.bodyTranslation) {
-          panel.bodyTranslation.classList.add('me-sum-pending')
-          panel.bodyTranslation.textContent = 'Waiting for the English result before translating...'
-        }
+  const [aiSettings, cfgRaw] = await Promise.all([
+    readAiSettings(),
+    chrome.storage.local.get({ translationLanguage: '' }),
+  ])
+  const translationLanguage: string = cfgRaw.translationLanguage ?? ''
+  current = buildPanel(req.headline, translationLanguage)
+  const panel = current
+  let runId = 0
+  const setStatus = (msg: string, isError = false) => {
+    if (!current) return
+    current.status.textContent = msg
+    current.status.classList.toggle('me-sum-error', isError)
+  }
+  const resetPanelContent = () => {
+    panel.bodyEn.classList.add('me-sum-pending')
+    panel.bodyEn.textContent = 'Waiting for response…'
+    if (panel.bodyTranslation) {
+      panel.bodyTranslation.classList.add('me-sum-pending')
+      panel.bodyTranslation.textContent = 'Waiting for the English result before translating...'
+    }
+  }
+
+  const cfg: AiProviderConfig = getAiConfig(aiSettings)
+  const provider = cfg.provider
+  if (!cfg.model) {
+    setStatus(
+      provider === 'ollama'
+        ? 'No model selected. Open Options to pick one.'
+        : 'No cloud model configured. Open Options to set one.',
+      true,
+    )
+    return
+  }
+  if (provider !== 'ollama' && !cfg.apiKey) {
+    setStatus(`No ${provider} API key configured. Open Options to add one.`, true)
+    return
+  }
+  if (!req.articleText || !req.articleText.trim()) {
+    setStatus('No article content detected on this page.', true)
+    return
+  }
+  if (!req.instruction || !req.instruction.trim()) {
+    setStatus('No instruction provided.', true)
+    return
+  }
+
+  const runGeneration = async () => {
+    const thisRun = ++runId
+    disconnectPorts()
+    resetPanelContent()
+    panel.regenerateBtn.disabled = true
+    setStatus(`Connecting to ${provider}…`)
+
+    try {
+      const english = await streamInto(
+        panel.bodyEn,
+        cfg,
+        {
+          instruction: req.instruction,
+          title: req.articleTitle,
+          text: req.articleText,
+          context: req.extraContext,
+        },
+        setStatus,
+      )
+      if (!current || thisRun !== runId) return
+      if (!english.trim() || !panel.bodyTranslation) {
+        setStatus('Done.')
+        return
       }
 
-      const provider: AiProviderConfig['provider'] = cfgRaw.aiProvider === 'openai' || cfgRaw.aiProvider === 'anthropic'
-        ? cfgRaw.aiProvider
-        : 'ollama'
-      const cfg: AiProviderConfig = provider === 'ollama'
-        ? { provider, baseUrl: cfgRaw.ollamaBaseUrl || 'http://localhost:11434', model: cfgRaw.ollamaModel }
-        : { provider, baseUrl: '', model: cfgRaw.aiCloudModel, apiKey: cfgRaw.aiApiKey }
-      if (!cfg.model) {
-        setStatus(
-          provider === 'ollama'
-            ? 'No model selected. Open Options to pick one.'
-            : 'No cloud model configured. Open Options to set one.',
-          true,
+      setStatus(`Translating to ${labelForLanguage(translationLanguage)}…`)
+      panel.bodyTranslation.textContent = 'Translating...'
+      try {
+        await streamInto(
+          panel.bodyTranslation,
+          cfg,
+          {
+            instruction: buildTranslateInstruction(translationLanguage),
+            title: '',
+            text: english,
+          },
+          setStatus,
         )
-        return
-      }
-      if (provider !== 'ollama' && !cfg.apiKey) {
-        setStatus(`No ${provider} API key configured. Open Options to add one.`, true)
-        return
-      }
-      if (!req.articleText || !req.articleText.trim()) {
-        setStatus('No article content detected on this page.', true)
-        return
-      }
-      if (!req.instruction || !req.instruction.trim()) {
-        setStatus('No instruction provided.', true)
-        return
-      }
-
-      const runGeneration = async () => {
-        const thisRun = ++runId
-        disconnectPorts()
-        resetPanelContent()
-        panel.regenerateBtn.disabled = true
-        setStatus('Connecting to Ollama…')
-
-        try {
-          const english = await streamInto(
-            panel.bodyEn,
-            cfg,
-            {
-              instruction: req.instruction,
-              title: req.articleTitle,
-              text: req.articleText,
-              context: req.extraContext,
-            },
-            setStatus,
-          )
-          if (!current || thisRun !== runId) return
-          let primaryDoneStatus = ''
-          if (req.onPrimaryDone) {
-            try {
-              const callbackResult = await req.onPrimaryDone(english)
-              if (typeof callbackResult === 'string') {
-                primaryDoneStatus = callbackResult
-              }
-            } catch {}
-          }
-          if (req.autoCopyPrimary && english.trim()) {
-            navigator.clipboard.writeText(english).then(() => {
-              if (current && thisRun === runId) {
-                const copiedStatus = req.autoCopyStatusText || 'Done. Copied to clipboard.'
-                setStatus(primaryDoneStatus || copiedStatus)
-              }
-            }).catch(() => {
-                if (current && thisRun === runId) setStatus('Done. Could not auto-copy response.', true)
-            })
-          }
-          if (!english.trim() || !panel.bodyTranslation) {
-            if (!req.autoCopyPrimary) setStatus(primaryDoneStatus || 'Done.')
-            return
-          }
-
-          setStatus(`Translating to ${labelForLanguage(translationLanguage)}…`)
-          panel.bodyTranslation.textContent = 'Translating...'
-          try {
-            await streamInto(
-              panel.bodyTranslation,
-              cfg,
-              {
-                instruction: buildTranslateInstruction(translationLanguage),
-                title: '',
-                text: english,
-              },
-              setStatus,
-            )
-            if (current && thisRun === runId) setStatus('Done.')
-          } catch (error: any) {
-            if (error?.message !== 'cancelled') {
-              // streamInto already reported the error via onStatus
-            }
-          }
-        } catch (error: any) {
-          if (error?.message !== 'cancelled') {
-            // streamInto already reported the error via onStatus
-          }
-        } finally {
-          if (current && thisRun === runId) {
-            panel.regenerateBtn.disabled = false
-          }
+        if (current && thisRun === runId) setStatus('Done.')
+      } catch (error: any) {
+        if (error?.message !== 'cancelled') {
+          // streamInto already reported the error via onStatus
         }
       }
+    } catch (error: any) {
+      if (error?.message !== 'cancelled') {
+        // streamInto already reported the error via onStatus
+      }
+    } finally {
+      if (current && thisRun === runId) {
+        panel.regenerateBtn.disabled = false
+      }
+    }
+  }
 
-      panel.regenerateBtn.addEventListener('click', runGeneration)
-      runGeneration()
-    },
-  )
+  panel.regenerateBtn.addEventListener('click', runGeneration)
+  runGeneration()
 }
-
-export const hideAiPanel = disposePanel

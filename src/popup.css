@@ -169,3 +169,6 @@ body {
 .popup-footer a:hover {
   text-decoration: underline;
 }
+
+.clip-actions { display: flex; gap: 8px; }
+.clip-actions .clip-markdown-btn { flex: 1; width: auto; }

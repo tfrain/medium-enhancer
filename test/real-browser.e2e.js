@@ -56,8 +56,8 @@ const ok = (name, cond, extra = '') => console.log((cond ? 'PASS ' : 'FAIL ') + 
   ok('Wikipedia: content script NOT auto-injected', wikiInjected !== true, String(wikiInjected));
 
   if (pm.id) {
-    const clip = await sw.evaluate(async (tabId) => await new Promise(res => chrome.tabs.sendMessage(tabId, { type: 'clipPageAsMarkdown' }, r => res(r || { le: chrome.runtime.lastError && chrome.runtime.lastError.message }))), pm.id);
-    ok('Medium: Convert Page to Markdown returns markdown (download mode by default)', clip && clip.ok && clip.mode === 'download' && clip.markdown && clip.markdown.length > 2000, `mode=${clip && clip.mode} title=${clip && (clip.title||'').slice(0,60)} chars=${clip && clip.markdown ? clip.markdown.length : 0} ${clip && clip.error ? 'error='+clip.error : ''}`);
+    const clip = await sw.evaluate(async (tabId) => await new Promise(res => chrome.tabs.sendMessage(tabId, { type: 'clipPageAsMarkdown', target: 'download' }, r => res(r || { le: chrome.runtime.lastError && chrome.runtime.lastError.message }))), pm.id);
+    ok('Medium: Convert Page to Markdown returns markdown (explicit download target)', clip && clip.ok && clip.mode === 'download' && clip.markdown && clip.markdown.length > 2000, `mode=${clip && clip.mode} title=${clip && (clip.title||'').slice(0,60)} chars=${clip && clip.markdown ? clip.markdown.length : 0} ${clip && clip.error ? 'error='+clip.error : ''}`);
     if (clip && clip.markdown) fs.writeFileSync(path.join(OUT, 'clip.md'), clip.markdown);
     const feeds = await sw.evaluate(async (tabId) => (await chrome.storage.local.get(`feeds_${tabId}`))[`feeds_${tabId}`] || null, pm.id);
     ok('Medium: RSS feeds found', Array.isArray(feeds) && feeds.length > 0, JSON.stringify(feeds));

@@ -16,6 +16,7 @@
 
 import {
   fetchTopEarners,
+  fetchViewerUsername,
   getCurrentDraftTitle,
   isMediumEditorPage,
   scoreRelevance,
@@ -112,6 +113,8 @@ const CSS = `
 
 let ballEl: HTMLDivElement | null = null
 let panelEl: HTMLDivElement | null = null
+let requestVersion = 0
+let featureEnabled = false
 
 const ensureCSS = () => {
   if (document.getElementById(`${BALL_ID}__style`)) return
@@ -122,6 +125,11 @@ const ensureCSS = () => {
 }
 
 const closePanel = () => {
+  requestVersion++
+  removePanel()
+}
+
+const removePanel = () => {
   if (panelEl) {
     panelEl.remove()
     panelEl = null
@@ -159,13 +167,13 @@ const renderPanel = (
   posts: RankedPost[] | null,
   error: string | null,
 ) => {
-  closePanel()
+  removePanel()
   const el = document.createElement('div')
   el.id = PANEL_ID
 
   const header = document.createElement('div')
   header.className = 'me-sc-header'
-  header.textContent = `@${username}'s past stories (sorted by relevance; earnings only break ties)`
+  header.textContent = username ? `@${username}'s past stories (sorted by relevance; earnings only break ties)` : 'Your past stories'
   el.appendChild(header)
 
   const sub = document.createElement('div')
@@ -186,6 +194,11 @@ const renderPanel = (
     const empty = document.createElement('div')
     empty.className = 'me-sc-empty'
     empty.textContent = 'Loading...'
+    el.appendChild(empty)
+  } else if (posts.length === 0) {
+    const empty = document.createElement('div')
+    empty.className = 'me-sc-empty'
+    empty.textContent = 'No published stories found for your Medium account.'
     el.appendChild(empty)
   } else if (draftTitle && bestScore === 0) {
     // No candidate shares any real title vocabulary with the draft — showing
@@ -237,36 +250,35 @@ const renderPanel = (
   document.body.appendChild(el)
   panelEl = el
   // Defer listener registration so the opening click doesn't immediately close it.
-  window.setTimeout(() => document.addEventListener('click', onDocClick, true), 0)
+  window.setTimeout(() => { if (panelEl === el) document.addEventListener('click', onDocClick, true) }, 0)
 }
 
-const DEFAULT_USERNAME = 'wesley-wei'
-
 const openPanel = async () => {
-  if (panelEl) {
-    closePanel()
-    return
+  if (panelEl) { closePanel(); return }
+  if (!featureEnabled || !isMediumEditorPage()) return
+  const version = ++requestVersion
+  const url = window.location.href
+  const draftTitle = getCurrentDraftTitle()
+  const isCurrent = () => version === requestVersion && featureEnabled && !!ballEl && isMediumEditorPage() && window.location.href === url
+  renderPanel('', draftTitle, null, null)
+  let username = ''
+  try {
+    username = await fetchViewerUsername()
+    if (!isCurrent()) return
+    const pool = await fetchTopEarners(username, 20)
+    if (!isCurrent()) return
+    const ranked: RankedPost[] = pool
+      .map(p => ({ ...p, relevance: scoreRelevance(draftTitle, p.title) }))
+      .sort((a, b) => b.relevance - a.relevance || b.revenueUsd - a.revenueUsd)
+      .slice(0, 6)
+    renderPanel(username, draftTitle, ranked, null)
+  } catch (error) {
+    if (isCurrent()) renderPanel(username, draftTitle, null, (error as Error).message)
   }
-  chrome.storage.local.get({ selfCiteUsername: DEFAULT_USERNAME }, async (items) => {
-    const username = items.selfCiteUsername || DEFAULT_USERNAME
-    const draftTitle = getCurrentDraftTitle()
-    renderPanel(username, draftTitle, null, null)
-    try {
-      // Pull a larger pool than we'll display, so relevance re-ranking has
-      // something to actually rank instead of just the top-6-by-revenue.
-      const pool = await fetchTopEarners(username, 20)
-      const ranked: RankedPost[] = pool
-        .map((p) => ({ ...p, relevance: scoreRelevance(draftTitle, p.title) }))
-        .sort((a, b) => b.relevance - a.relevance || b.revenueUsd - a.revenueUsd)
-        .slice(0, 6)
-      renderPanel(username, draftTitle, ranked, null)
-    } catch (e) {
-      renderPanel(username, draftTitle, null, (e as Error).message)
-    }
-  })
 }
 
 export const mountSelfCiteBall = () => {
+  featureEnabled = true
   if (!isMediumEditorPage()) {
     unmountSelfCiteBall()
     return
@@ -291,6 +303,8 @@ export const mountSelfCiteBall = () => {
 }
 
 export const unmountSelfCiteBall = () => {
+  featureEnabled = false
+  window.removeEventListener('DOMContentLoaded', mountSelfCiteBall)
   closePanel()
   if (ballEl) {
     ballEl.remove()

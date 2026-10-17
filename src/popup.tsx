@@ -1,3 +1,5 @@
+import { OBSIDIAN_SENT_MESSAGE } from "./shared/obsidian-clip"
+import { classifyMediumUrl } from "./shared/medium-url"
 import "./popup.css"
 import { useState, useEffect } from "react"
 import { triggerMarkdownDownload } from "./shared/markdown-download"
@@ -63,10 +65,13 @@ function IndexPopup() {
   // null = loading, true = Medium article, false = not Medium
   const [isMediumPage, setIsMediumPage] = useState<boolean | null>(null)
   const [clipStatus, setClipStatus] = useState<ClipStatus>("idle")
+  const [obsidianEnabled, setObsidianEnabled] = useState(false)
+  const [clipTarget, setClipTarget] = useState<'download' | 'obsidian'>('download')
   const [clipError, setClipError] = useState<string>("")
 
   // Explicit-click only — this never runs on its own. Works on any site.
-  const handleClipToMarkdown = () => {
+  const handleClipToMarkdown = (target: 'download' | 'obsidian') => {
+    setClipTarget(target)
     setClipStatus("working")
     setClipError("")
     chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
@@ -77,12 +82,14 @@ function IndexPopup() {
       }
       try {
         // Opening the popup granted activeTab, so this works on any normal page.
-        const response: any = await sendToTab(tab.id, { type: "clipPageAsMarkdown" })
+        const response: any = await sendToTab(tab.id, { type: "clipPageAsMarkdown", target })
         if (!response?.ok) throw new Error(response?.error || "Could not read this page.")
-        // mode 'obsidian': the content script already sent it to the
-        // configured vault folder. mode 'download': fall back to a file save.
         if (response.mode === "download") {
           await triggerMarkdownDownload(response.title, response.markdown)
+        }
+        if (target === 'obsidian') {
+          await chrome.tabs.sendMessage(tab.id, { type: 'showExportToast', text: OBSIDIAN_SENT_MESSAGE })
+            .catch(error => console.warn('Cannot show Obsidian feedback on this page', error))
         }
         setClipStatus("done")
         setTimeout(() => setClipStatus("idle"), 1500)
@@ -96,13 +103,16 @@ function IndexPopup() {
   }
 
   useEffect(() => {
+    chrome.storage.local.get({ obsidianClipperEnabled: false }, items => setObsidianEnabled(items.obsidianClipperEnabled))
     let fallbackTimer: ReturnType<typeof setTimeout> | undefined
     let activeTabId: number | undefined
+    let activeTabIsMedium = false
 
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       if (!tab || !tab.url) { setIsMediumPage(false); return }
       activeTabId = tab.id
-      if (/-[0-9a-z]{10,}(?:[/?#]|$)/i.test(tab.url)) {
+      activeTabIsMedium = !!classifyMediumUrl(tab.url)
+      if (activeTabIsMedium) {
         const feedsKey = `feeds_${tab.id}`
         chrome.storage.local.get([feedsKey], (result) => {
           const stored = result[feedsKey]
@@ -119,10 +129,12 @@ function IndexPopup() {
       }
     })
 
-    const storageListener = (changes: Record<string, chrome.storage.StorageChange>) => {
+    const storageListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area !== 'local') return
+      if (changes.obsidianClipperEnabled) setObsidianEnabled(!!changes.obsidianClipperEnabled.newValue)
       if (activeTabId === undefined) return
       const feedsKey = `feeds_${activeTabId}`
-      if (changes[feedsKey]) {
+      if (activeTabIsMedium && changes[feedsKey]) {
         const newFeeds = changes[feedsKey].newValue || []
         setFeeds(newFeeds)
         clearTimeout(fallbackTimer)
@@ -142,10 +154,10 @@ function IndexPopup() {
       return <p className="popup-message">Loading…</p>
     }
     if (!isMediumPage) {
-      return <p className="popup-message">Open a Medium article to discover RSS feeds.</p>
+      return <p className="popup-message">Open a Medium article, profile or publication to discover RSS feeds.</p>
     }
     if (feeds.length === 0) {
-      return <p className="popup-message">No RSS feeds found for this article.</p>
+      return <p className="popup-message">No RSS feeds found for this page.</p>
     }
     return feeds.map((feed, i) => <FeedCard key={i} feed={feed} />)
   }
@@ -154,18 +166,17 @@ function IndexPopup() {
     <div className="popup-root">
       <div className="popup-header">RSS Feeds</div>
 
-      <button
-        type="button"
-        className="clip-markdown-btn"
-        onClick={handleClipToMarkdown}
-        disabled={clipStatus === "working"}
-      >
-        {clipStatus === "working"
-          ? "Converting..."
-          : clipStatus === "done"
-            ? "Saved ✓"
-            : "Convert Page to Markdown"}
-      </button>
+      <div className="clip-actions">
+        <button type="button" className="clip-markdown-btn"
+          onClick={() => handleClipToMarkdown('download')} disabled={clipStatus === 'working'}>
+          {clipStatus === 'working' && clipTarget === 'download' ? 'Downloading...' : 'Download .md'}
+        </button>
+        {obsidianEnabled && <button type="button" className="clip-markdown-btn"
+          onClick={() => handleClipToMarkdown('obsidian')} disabled={clipStatus === 'working'}>
+          {clipStatus === 'working' && clipTarget === 'obsidian' ? 'Opening...' : 'Send to Obsidian'}
+        </button>}
+      </div>
+      {clipStatus === 'done' && <p className="popup-message">{clipTarget === 'obsidian' ? 'Opened Obsidian' : 'Saved to your Downloads folder'}</p>}
       {clipStatus === "error" && <p className="popup-message clip-error">{clipError}</p>}
 
       {renderBody()}

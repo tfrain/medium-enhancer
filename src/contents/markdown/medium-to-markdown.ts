@@ -1,3 +1,4 @@
+import { renderMarkdownNode, selectSubtitle, type MarkdownNode } from "../../shared/markdown-content"
 import { extractArticle } from "../lib/extract"
 
 export type MediumMarkdownClip = {
@@ -21,9 +22,6 @@ const sanitizeFilename = (value: string): string =>
 const normalizeText = (value: string): string =>
   String(value || "").replace(/\s+/g, " ").trim()
 
-const escapeMarkdown = (value: string): string =>
-  String(value || "").replace(/([\\`*_{}\[\]()#+\-.!|>])/g, "\\$1")
-
 const getMetaContent = (...selectors: string[]): string => {
   for (const selector of selectors) {
     const value = document.querySelector<HTMLMetaElement>(selector)?.content?.trim()
@@ -41,11 +39,12 @@ const getArticleTitle = (article: HTMLElement): string => {
 }
 
 const getArticleSubtitle = (article: HTMLElement, title: string): string => {
-  const candidates = Array.from(article.querySelectorAll("h2, p"))
-    .slice(0, 8)
-    .map((node) => normalizeText(node.textContent || ""))
-    .filter((text) => text && text !== title && text.length <= 180)
-  return candidates[0] || getMetaContent('meta[name="description"]')
+  const candidates = Array.from(article.querySelectorAll('h2, p, .graf--subtitle, [data-testid="storySubtitle"]'))
+    .map(node => ({
+      text: node.textContent || '',
+      mediumSubtitle: node.matches('.graf--subtitle, [data-testid="storySubtitle"]'),
+    }))
+  return selectSubtitle(window.location.hostname, candidates, title, getMetaContent('meta[name="description"]'))
 }
 
 const isNoise = (element: Element): boolean =>
@@ -70,114 +69,15 @@ const isNoise = (element: Element): boolean =>
     "#__me_summary_panel__",
   ].join(",")))
 
-const linkFor = (href: string | null): string => {
-  if (!href) return ""
-  try {
-    return new URL(href, window.location.href).href
-  } catch {
-    return href
-  }
-}
-
-const inlineMarkdown = (node: Node): string => {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return escapeMarkdown(node.textContent || "")
-  }
-  if (node.nodeType !== Node.ELEMENT_NODE) return ""
-
+// Keep DOM access here; the serializer receives only a plain content tree.
+const markdownNodeFrom = (node: Node): MarkdownNode => {
+  if (node.nodeType === Node.TEXT_NODE) return { tag: '', text: node.textContent || '' }
+  if (node.nodeType !== Node.ELEMENT_NODE || isNoise(node as Element)) return { tag: '', text: '' }
   const element = node as HTMLElement
-  if (isNoise(element)) return ""
-
-  const children = Array.from(element.childNodes).map(inlineMarkdown).join("")
-  switch (element.tagName) {
-    case "A": {
-      const href = linkFor(element.getAttribute("href"))
-      const text = children || normalizeText(element.textContent || "")
-      return href && text ? `[${text}](${href})` : text
-    }
-    case "STRONG":
-    case "B":
-      return children ? `**${children}**` : ""
-    case "EM":
-    case "I":
-      return children ? `_${children}_` : ""
-    case "CODE":
-      return `\`${(element.textContent || "").replace(/`/g, "\\`")}\``
-    case "BR":
-      return "\n"
-    default:
-      return children
-  }
-}
-
-const blockMarkdown = (node: Node, title: string): string => {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return normalizeText(node.textContent || "")
-  }
-  if (node.nodeType !== Node.ELEMENT_NODE) return ""
-
-  const element = node as HTMLElement
-  if (isNoise(element)) return ""
-
-  const text = normalizeText(element.textContent || "")
-  switch (element.tagName) {
-    case "H1":
-      return text && text !== title ? `# ${text}` : ""
-    case "H2":
-      return text ? `## ${text}` : ""
-    case "H3":
-      return text ? `### ${text}` : ""
-    case "H4":
-    case "H5":
-    case "H6":
-      return text ? `#### ${text}` : ""
-    case "P": {
-      const inline = inlineMarkdown(element).trim()
-      return inline || ""
-    }
-    case "BLOCKQUOTE": {
-      const quote = Array.from(element.childNodes)
-        .map((child) => blockMarkdown(child, title))
-        .join("\n\n")
-        .trim()
-      return quote
-        ? quote.split("\n").map((line) => `> ${line}`).join("\n")
-        : ""
-    }
-    case "UL":
-    case "OL": {
-      const ordered = element.tagName === "OL"
-      return Array.from(element.children)
-        .filter((child) => child.tagName === "LI")
-        .map((child, index) => {
-          const marker = ordered ? `${index + 1}.` : "-"
-          return `${marker} ${inlineMarkdown(child).trim()}`
-        })
-        .filter(Boolean)
-        .join("\n")
-    }
-    case "PRE": {
-      const code = element.textContent || ""
-      return code.trim() ? `\`\`\`\n${code.replace(/\n+$/g, "")}\n\`\`\`` : ""
-    }
-    case "IMG": {
-      const src = linkFor(element.getAttribute("src"))
-      const alt = normalizeText(element.getAttribute("alt") || "")
-      return src ? `![${alt}](${src})` : ""
-    }
-    case "FIGURE": {
-      const image = element.querySelector("img")
-      const src = image ? linkFor(image.getAttribute("src")) : ""
-      const alt = normalizeText(image?.getAttribute("alt") || "")
-      const caption = normalizeText(element.querySelector("figcaption")?.textContent || "")
-      if (!src) return caption
-      return caption ? `![${alt}](${src})\n\n_${escapeMarkdown(caption)}_` : `![${alt}](${src})`
-    }
-    default:
-      return Array.from(element.childNodes)
-        .map((child) => blockMarkdown(child, title))
-        .filter((part) => part.trim())
-        .join("\n\n")
+  return {
+    tag: element.tagName,
+    attrs: Object.fromEntries(['src', 'href', 'alt'].map(name => [name, element.getAttribute(name) || ''])),
+    children: Array.from(element.childNodes).map(markdownNodeFrom),
   }
 }
 
@@ -246,7 +146,7 @@ const findFallbackArticleRoot = (): HTMLElement | undefined => {
 
 const bodyMarkdownFrom = (root: HTMLElement, title: string): string => {
   const markdown = Array.from(root.children)
-    .map((child) => blockMarkdown(child, title))
+    .map((child) => renderMarkdownNode(markdownNodeFrom(child), title, window.location.href))
     .filter((part) => part.trim())
     .join("\n\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -279,7 +179,7 @@ export const clipCurrentMediumArticleAsMarkdown = (): MediumMarkdownClip => {
 
   cloned.querySelector("h1")?.remove()
   if (subtitle) {
-    const subtitleNode = Array.from(cloned.querySelectorAll("h2, p"))
+    const subtitleNode = Array.from(cloned.querySelectorAll('h2, p, .graf--subtitle, [data-testid="storySubtitle"]'))
       .find((node) => normalizeText(node.textContent || "") === subtitle)
     subtitleNode?.remove()
   }

@@ -1,3 +1,5 @@
+import { DEFAULT_AI_PROVIDER, DEFAULT_OLLAMA_URL, DEFAULT_MODELS, getAiConfig, readAiSettings, type AiProvider } from "./shared/ai-defaults";
+import { readStreamLines } from "./shared/stream-lines";
 import React, { useState, useEffect, useRef } from "react";
 import './options.css';
 import iconUrl from "data-base64:../assets/icon.png";
@@ -18,7 +20,7 @@ const CAPABILITIES: Capability[] = [
 	{
 		key: "obsidianClipperEnabled",
 		label: "Save to Obsidian",
-		description: "\"Convert Page to Markdown\" sends the article to your Obsidian vault instead of downloading a .md file.",
+		description: 'Adds "Send to Obsidian" next to the Markdown download. Needs Obsidian with the Advanced URI plugin.',
 	},
 	{
 		key: "selfCiteEnabled",
@@ -34,14 +36,7 @@ const BOOL_DEFAULTS: Record<string, boolean> = CAPABILITIES.reduce((acc, c) => {
 	return acc;
 }, {} as Record<string, boolean>);
 
-const DEFAULT_OLLAMA_URL = "http://localhost:11434";
-const DEFAULT_OLLAMA_MODEL = "llama3";
-type AiProvider = "ollama" | "openai" | "anthropic";
-const DEFAULT_AI_PROVIDER: AiProvider = "ollama";
-const DEFAULT_CLOUD_MODEL: Record<Exclude<AiProvider, "ollama">, string> = {
-	openai: "gpt-4o-mini",
-	anthropic: "claude-haiku-4-5",
-};
+const DEFAULT_OLLAMA_MODEL = DEFAULT_MODELS.ollama;
 const DEFAULT_TRANSLATION_LANGUAGE = "";   // off by default: the audience reads English
 const DEFAULT_OBSIDIAN_FOLDER = "clippers";
 const DEFAULT_OBSIDIAN_PATH_TEMPLATE = "clippers/{title}.md";
@@ -96,6 +91,7 @@ const Options = () => {
 	const [aiProvider, setAiProvider] = useState<AiProvider>(DEFAULT_AI_PROVIDER);
 	const [aiApiKey, setAiApiKey] = useState("");
 	const [aiCloudModel, setAiCloudModel] = useState("");
+	const providerSettings = useRef<Record<string, any>>({});
 	const [translationLanguage, setTranslationLanguage] = useState(DEFAULT_TRANSLATION_LANGUAGE);
 	const [obsidianVault, setObsidianVault] = useState("");
 	const [obsidianFolder, setObsidianFolder] = useState(DEFAULT_OBSIDIAN_FOLDER);
@@ -165,19 +161,20 @@ const Options = () => {
 				obsidianFolder: DEFAULT_OBSIDIAN_FOLDER,
 				obsidianPathTemplate: "",
 				aiProvider: DEFAULT_AI_PROVIDER,
-				aiApiKey: "",
-				aiCloudModel: "",
 			},
-			(items) => {
+			async (items) => {
+				const aiSettings = await readAiSettings();
+				providerSettings.current = aiSettings;
+				const config = getAiConfig(aiSettings);
 				const boolItems: Record<string, boolean> = {};
 				for (const c of CAPABILITIES) boolItems[c.key] = !!items[c.key];
 				setEnabled(boolItems);
 				setOllamaUrl(items.ollamaBaseUrl || DEFAULT_OLLAMA_URL);
 				setOllamaModel(items.ollamaModel || DEFAULT_OLLAMA_MODEL);
-				const provider: AiProvider = items.aiProvider === "openai" || items.aiProvider === "anthropic" ? items.aiProvider : "ollama";
+				const provider = config.provider;
 				setAiProvider(provider);
-				setAiApiKey(items.aiApiKey || "");
-				setAiCloudModel(items.aiCloudModel || (provider !== "ollama" ? DEFAULT_CLOUD_MODEL[provider] : ""));
+				setAiApiKey(config.apiKey);
+				setAiCloudModel(config.model);
 				setTranslationLanguage(items.translationLanguage ?? DEFAULT_TRANSLATION_LANGUAGE);
 				setObsidianVault(items.obsidianVault || "");
 				setObsidianFolder(items.obsidianFolder || DEFAULT_OBSIDIAN_FOLDER);
@@ -227,20 +224,27 @@ const Options = () => {
 
 	const selectAiProvider = (provider: AiProvider) => {
 		setAiProvider(provider);
-		const nextModel = provider === "ollama" ? aiCloudModel : (aiCloudModel || DEFAULT_CLOUD_MODEL[provider]);
-		if (provider !== "ollama" && !aiCloudModel) setAiCloudModel(nextModel);
+		const config = getAiConfig(providerSettings.current, provider);
+		setAiApiKey(config.apiKey);
+		setAiCloudModel(config.model);
 		chrome.storage.local.set({ aiProvider: provider }, () => flash("Saved"));
 		if (provider === "ollama") updateModelList(ollamaUrl);
 	};
 
 	const saveAiApiKey = () => {
-		chrome.storage.local.set({ aiApiKey: aiApiKey.trim() }, () => flash("Saved"));
+		if (aiProvider === 'ollama') return;
+		const key = aiProvider + 'ApiKey';
+		providerSettings.current[key] = aiApiKey.trim();
+		chrome.storage.local.set({ [key]: aiApiKey.trim() }, () => flash("Saved"));
 	};
 
 	const saveAiCloudModel = () => {
-		const v = aiCloudModel.trim() || (aiProvider !== "ollama" ? DEFAULT_CLOUD_MODEL[aiProvider] : "");
+		if (aiProvider === 'ollama') return;
+		const v = aiCloudModel.trim() || DEFAULT_MODELS[aiProvider];
+		const key = aiProvider + 'Model';
+		providerSettings.current[key] = v;
 		setAiCloudModel(v);
-		chrome.storage.local.set({ aiCloudModel: v }, () => flash("Saved"));
+		chrome.storage.local.set({ [key]: v }, () => flash("Saved"));
 	};
 
 	const selectTranslationLanguage = (lang: string) => {
@@ -272,31 +276,20 @@ const Options = () => {
 				signal: ac.signal,
 			});
 			if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-			const reader = res.body.getReader();
-			const decoder = new TextDecoder();
-			let buffer = "";
-			while (true) {
-				const { value, done } = await reader.read();
-				if (done) break;
-				buffer += decoder.decode(value, { stream: true });
-				let idx: number;
-				while ((idx = buffer.indexOf("\n")) >= 0) {
-					const line = buffer.slice(0, idx).trim();
-					buffer = buffer.slice(idx + 1);
-					if (!line) continue;
-					try {
-						const p = JSON.parse(line);
-						if (p.error) throw new Error(p.error);
-						setPullState((prev) => ({
-							...prev,
-							status: p.status || prev.status,
-							completed: p.completed ?? prev.completed,
-							total: p.total ?? prev.total,
-						}));
-					} catch (e: any) {
-						if (e instanceof SyntaxError) continue;
-						throw e;
-					}
+			for await (const line of readStreamLines(res.body)) {
+				if (!line.trim()) continue;
+				try {
+					const p = JSON.parse(line);
+					if (p.error) throw new Error(p.error);
+					setPullState((prev) => ({
+						...prev,
+						status: p.status || prev.status,
+						completed: p.completed ?? prev.completed,
+						total: p.total ?? prev.total,
+					}));
+				} catch (e: any) {
+					if (e instanceof SyntaxError) continue;
+					throw e;
 				}
 			}
 			setPullState((prev) => ({ ...prev, active: false, status: "done" }));
@@ -328,11 +321,13 @@ const Options = () => {
 				"aiProvider",
 				"aiApiKey",
 				"aiCloudModel",
+				"openaiApiKey", "anthropicApiKey", "openaiModel", "anthropicModel",
 			],
 			() => {
 				setEnabled(BOOL_DEFAULTS);
 				setOllamaUrl(DEFAULT_OLLAMA_URL);
 				setOllamaModel(DEFAULT_OLLAMA_MODEL);
+				providerSettings.current = {};
 				setAiProvider(DEFAULT_AI_PROVIDER);
 				setAiApiKey("");
 				setAiCloudModel("");
@@ -414,7 +409,7 @@ const Options = () => {
 								<label htmlFor="ai-cloud-model">Model</label>
 								<input id="ai-cloud-model" type="text" value={aiCloudModel}
 									onChange={(e) => setAiCloudModel(e.target.value)} onBlur={saveAiCloudModel}
-									placeholder={DEFAULT_CLOUD_MODEL[aiProvider]} />
+									placeholder={DEFAULT_MODELS[aiProvider]} />
 							</div>
 						</>
 					)}

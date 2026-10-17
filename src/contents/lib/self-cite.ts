@@ -108,6 +108,32 @@ export const scoreRelevance = (draftTitle: string, candidateTitle: string): numb
 let cache: { username: string; posts: SelfCitePost[]; fetchedAt: number } | null = null
 const CACHE_TTL_MS = 10 * 60 * 1000 // 10min — avoid refetching on every URL-poll tick
 
+const graphqlData = (json: any): any => {
+  const result = Array.isArray(json) ? json[0] : json
+  if (result?.errors?.length) {
+    throw new Error('Medium could not load your stories: ' + result.errors.map((error: any) => error.message || 'GraphQL error').join('; '))
+  }
+  if (!result?.data) throw new Error('Medium returned no story data. Sign in to Medium and try again.')
+  return result.data
+}
+
+export const fetchViewerUsername = async (): Promise<string> => {
+  const res = await fetch(GRAPHQL_URL, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify([{
+      operationName: 'ViewerQuery',
+      query: 'query ViewerQuery { viewer { id username } }',
+      variables: {},
+    }]),
+  })
+  if (!res.ok) throw new Error(`Medium viewer request failed (${res.status}). Sign in to Medium and try again.`)
+  const username = graphqlData(await res.json()).viewer?.username
+  if (!username) throw new Error('Sign in to Medium to see your stories.')
+  return username
+}
+
 export const fetchTopEarners = async (username: string, limit = 5): Promise<SelfCitePost[]> => {
   if (cache && cache.username === username && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
     return cache.posts.slice(0, limit)
@@ -136,7 +162,9 @@ export const fetchTopEarners = async (username: string, limit = 5): Promise<Self
   if (!res.ok) throw new Error(`self-cite: GraphQL request failed (${res.status})`)
 
   const json = await res.json()
-  const edges = json?.[0]?.data?.user?.postsConnection?.edges ?? []
+  const user = graphqlData(json).user
+  if (!user?.postsConnection) throw new Error('Medium could not load your stories. Sign in to Medium and try again.')
+  const edges = user.postsConnection.edges ?? []
   const posts: SelfCitePost[] = edges.map((edge: any) => {
     const n = edge.node
     const earn = n?.earnings?.total ?? { units: 0, nanos: 0 }
