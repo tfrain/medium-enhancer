@@ -21,7 +21,7 @@ try {
       }
     }
   }
-  const { triggerMarkdownDownload } = await import(
+  const { triggerMarkdownDownload, triggerPngDownload } = await import(
     "../src/shared/markdown-download.ts"
   )
   let resolved = false
@@ -65,6 +65,13 @@ try {
   chrome.runtime.lastError = undefined
   await assert.rejects(denied, /Downloads disabled/)
   assert.equal(listeners.size, 0)
+  const png = triggerPngDownload("A/B", "data:image/png;base64,iVBORw0KGgo=")
+  assert.equal(options.filename, "AB.png")
+  assert.equal(options.url, "data:image/png;base64,iVBORw0KGgo=")
+  downloadCallback!(9)
+  searchCallback!([{ state: "complete" }])
+  assert.equal(await png, 9)
+  await assert.rejects(triggerPngDownload("Title", "https://example.com/image.png"), /Invalid PNG/)
   console.log(
     "PASS Markdown download waits for completion and reports specific failures"
   )

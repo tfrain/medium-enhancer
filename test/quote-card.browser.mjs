@@ -1,0 +1,82 @@
+// Offline smoke test against a synthetic Medium story, using the built extension.
+// Run: npm i --no-save puppeteer-core@22 && npm run build && node test/quote-card.browser.mjs
+// (uses the existing local Playwright Chromium; no network, no Medium account).
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import puppeteer from 'puppeteer-core'
+const extension = path.resolve('build/chrome-mv3-prod')
+const executablePath = path.join(os.homedir(), 'Library/Caches/ms-playwright/chromium-1134/chrome-mac/Chromium.app/Contents/MacOS/Chromium')
+const story = 'https://medium.com/@writer/a-story-abcdef123456'
+const html = `<!doctype html><html><head><title>A story</title><meta name="author" content="Test Author"><link rel="canonical" href="${story}"></head><body><article><h1>A story</h1><a data-testid="publicationName">Test Publication</a><p id="a1b2">A useful paragraph with enough words for a quote card.</p><p id="bad-id">Another paragraph with no Medium paragraph name.</p><p id="c3d4">${'Long quotation text '.repeat(70)}</p></article></body></html>`
+;(async () => {
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'me-pro-browser-'))
+  let browser
+  try {
+    browser = await puppeteer.launch({ executablePath, headless: false, userDataDir: profile,
+      args: ['--headless=new', '--no-first-run', `--disable-extensions-except=${extension}`, `--load-extension=${extension}`] })
+    const workerTarget = await browser.waitForTarget(t => t.type() === 'service_worker')
+    const worker = await workerTarget.worker()
+    const extensionId = new URL(workerTarget.url()).host
+    const page = await browser.newPage()
+    const errors = []
+    page.on('pageerror', e => errors.push(e.message))
+    await page.setRequestInterception(true)
+    page.on('request', request => request.isNavigationRequest() ? request.respond({ status: 200, contentType: 'text/html', body: html })
+      // Only block the network; the extension's own chrome-extension:// files must load.
+      : /^https?:/.test(request.url()) ? request.abort() : request.continue())
+    await page.goto(story)
+    // Installing the extension opens its Options tab, which takes focus; a background
+    // tab pauses requestAnimationFrame, and the Card button is positioned in one.
+    await page.bringToFront()
+    const select = async (id, collapse = false) => page.evaluate((id, collapse) => {
+      const range = document.createRange()
+      range.selectNodeContents(document.getElementById(id))
+      if (collapse) range.collapse(true)
+      const selection = window.getSelection()
+      selection.removeAllRanges()
+      selection.addRange(range)
+    }, id, collapse)
+    // The content script runs in an isolated world, so the page cannot see its globals;
+    // wait for its first visible effect instead, re-selecting until it has mounted.
+    for (let i = 0; ; i++) {
+      await select('a1b2')
+      try { await page.waitForSelector('#__me_quote_card_button__', { visible: true, timeout: 500 }); break }
+      catch (e) { if (i >= 20) throw e }
+    }
+    await page.click('#__me_quote_card_button__')
+    await page.waitForSelector('#__me_quote_card_panel__ canvas')
+    assert.equal(await page.$eval('#__me_quote_card_panel__ input', e => e.value), 'https://medium.com/p/abcdef123456#a1b2')
+    assert.equal(await page.$$eval('#__me_quote_card_panel__ button:disabled', es => es.length), 5)
+    assert.deepEqual(await page.$eval('#__me_quote_card_panel__ canvas', e => [e.width, e.height]), [1200, 675])
+    assert.ok(await page.$eval('#__me_quote_card_panel__', e => e.textContent.includes('Test Author') && e.textContent.includes('Test Publication')))
+    await page.click('#__me_quote_card_panel__ [aria-label="Close"]')
+    await page.waitForSelector('#__me_quote_card_button__', { visible: true })
+    await select('bad-id')
+    await page.waitForSelector('#__me_quote_card_button__', { visible: true })
+    await page.click('#__me_quote_card_button__')
+    await page.waitForSelector('#__me_quote_card_panel__ canvas')
+    assert.equal(await page.$eval('#__me_quote_card_panel__ input', e => e.value), story)
+    await page.click('#__me_quote_card_panel__ [aria-label="Close"]')
+    await select('c3d4')
+    await page.waitForSelector('#__me_quote_card_button__', { visible: true })
+    await page.click('#__me_quote_card_button__')
+    await page.waitForFunction(() => document.querySelector('#__me_quote_card_panel__')?.textContent.includes('truncated'))
+    await page.evaluate(() => { history.pushState({}, '', '/@writer'); window.dispatchEvent(new PopStateEvent('popstate')) })
+    await page.waitForFunction(() => !document.getElementById('__me_quote_card_panel__'))
+    const options = await browser.newPage()
+    await options.goto(`chrome-extension://${extensionId}/options.html`)
+    await options.waitForSelector('#pro-key')
+    assert.ok(await options.evaluate(() => document.body.textContent.includes('Not unlocked')))
+    assert.equal(await options.$$eval('a', es => es.filter(e => e.textContent === 'Get a key').length), 0)
+    await options.type('#pro-key', 'invalid')
+    await options.click('button[type="submit"]')
+    await options.waitForFunction(() => document.body.textContent.includes('That key did not work'))
+    assert.deepEqual(errors, [])
+    console.log('PASS offline browser: selection, Canvas, locked choices, attribution, paragraph fallback, truncation, SPA cleanup and Pro Options')
+  } finally {
+    if (browser) await browser.close()
+    fs.rmSync(profile, { recursive: true, force: true })
+  }
+})().catch(error => { console.error(error); process.exit(1) })

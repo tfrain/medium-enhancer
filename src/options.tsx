@@ -1,4 +1,5 @@
 import { DEFAULT_AI_PROVIDER, DEFAULT_OLLAMA_URL, DEFAULT_MODELS, getAiConfig, readAiSettings, type AiProvider } from "./shared/ai-defaults";
+import { PRO_GET_KEY_URL, canGetProKey, proStatus, tryUnlock, type ProStatus } from "./shared/pro";
 import { ARTICLE_URL } from "./shared/whats-new"
 import { readStreamLines } from "./shared/stream-lines";
 import React, { useState, useEffect, useRef } from "react";
@@ -107,6 +108,38 @@ const Options = () => {
 	const pullAbort = useRef<AbortController | null>(null);
 	const [statusMessage, setStatusMessage] = useState("");
 	const [loaded, setLoaded] = useState(false);
+	const [pro, setPro] = useState<ProStatus>({ state: 'none' });
+	const [proKey, setProKey] = useState("");
+	const [proMessage, setProMessage] = useState("");
+	const [unlocking, setUnlocking] = useState(false);
+
+	useEffect(() => {
+		const refresh = () => { proStatus().then(setPro).catch(() => setProMessage("Could not read Pro status.")); };
+		const onChanged = (changes, area) => {
+			if ((area === 'local' || area === 'sync') && (changes.enhancerProUnlocked || changes.enhancerProKey)) refresh();
+		};
+		refresh();
+		window.addEventListener('focus', refresh);
+		chrome.storage.onChanged.addListener(onChanged);
+		return () => {
+			window.removeEventListener('focus', refresh);
+			chrome.storage.onChanged.removeListener(onChanged);
+		};
+	}, []);
+
+	const unlockPro = async (e: React.FormEvent) => {
+		e.preventDefault();
+		setUnlocking(true);
+		try {
+			const result = await tryUnlock(proKey);
+			setProMessage(result === 'ok' ? 'Pro unlocked. Keep your key for reinstalls or another computer.' :
+				result === 'expired' ? 'That key has expired.' : 'That key did not work. Check it and try again.');
+			setPro(await proStatus());
+			if (result === 'ok') setProKey("");
+		} catch {
+			setProMessage('Could not save the key. Please try again.');
+		} finally { setUnlocking(false); }
+	};
 
 	// Matches NativeMind's testConnection() (ollama.ts:113-128): fetch origin, check "Ollama is running"
 	const testConnection = async (baseUrl: string): Promise<boolean> => {
@@ -381,6 +414,26 @@ const Options = () => {
 						</span>
 					</label>
 				))}
+			</section>
+
+			<section className="card">
+				<h2>Pro</h2>
+				<p className="hint">Quote cards without the watermark, all card styles and sizes; more Pro features are coming.</p>
+				<p role="status">{pro.state === 'active' ? `Pro active, valid until ${pro.validUntil}` :
+					pro.state === 'expired' ? `Expired — valid until ${pro.validUntil}` : 'Not unlocked'}</p>
+				{pro.key && <p className="hint">Your key: <code>{pro.key}</code>. Keep it for reinstalls or another computer.</p>}
+				<form onSubmit={unlockPro}>
+					<div className="field">
+						<label htmlFor="pro-key">Pro key</label>
+						<div className="inline">
+							<input id="pro-key" type="text" autoComplete="off" spellCheck={false} value={proKey}
+								onChange={(e) => setProKey(e.target.value)} placeholder="Enter your key" />
+							<button type="submit" className="btn" disabled={unlocking || !proKey.trim()}>{unlocking ? 'Unlocking…' : 'Unlock'}</button>
+						</div>
+					</div>
+				</form>
+				<div className="hint" role="status">{proMessage}</div>
+				{canGetProKey() && <a className="btn" href={PRO_GET_KEY_URL} target="_blank" rel="noopener">Get a key</a>}
 			</section>
 
 			{enabled.aiSummaryEnabled && (

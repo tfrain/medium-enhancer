@@ -2,16 +2,20 @@ import { showToast } from './util/toast'
 import { AI_PRESETS } from './ui/ai-presets'
 import { extractArticle, extractArticleTextForAI } from './lib/extract'
 import { showAiPanel } from './ui/summary-panel'
+import { mountQuoteCardButton, openQuoteCardFromSelection, resetQuoteCard } from './ui/quote-card-panel'
 import { mountSelfCiteBall, unmountSelfCiteBall } from './ui/self-cite-panel'
 import { clipCurrentMediumArticleAsMarkdown } from './markdown/medium-to-markdown'
 import { sendClipToObsidian } from '../shared/obsidian-clip'
 import type { PlasmoCSConfig } from "plasmo"
 
-// Runs on its own only on Medium, for the Cite My Story button in the editor.
+// Runs on its own on Medium for Cite My Story in the editor and quote cards in stories.
 // Everywhere else (summary, Markdown export) it is injected when the user
 // clicks the menu, shortcut or popup button (see shared/injection.ts).
 export const config: PlasmoCSConfig = {
-  matches: ["https://*.medium.com/*"],
+  matches: [
+    "https://*.medium.com/*", "https://ai.gopubby.com/*", "https://bettermarketing.pub/*",
+    "https://itnext.io/*", "https://pub.towardsai.net/*", "https://uxdesign.cc/*", "https://writingcooperative.com/*",
+  ],
   run_at: "document_end",
 }
 
@@ -42,6 +46,12 @@ if (window === window.top && !alreadyLoaded) {
         } catch (e) {
           sendResponse({ ok: false, error: (e as Error).message })
         }
+      }
+
+      if (request?.type === 'showQuoteCard') {
+        openQuoteCardFromSelection(String(request.selectionText || ''))
+        sendResponse({ ok: true })
+        return
       }
 
       if (request?.type === 'showExportToast') {
@@ -83,6 +93,8 @@ if (window === window.top && !alreadyLoaded) {
     selfCiteEnabled: true,
   }
 
+  mountQuoteCardButton()
+
   let settingsVersion = 0
   const loadFeatures = () => {
     const version = ++settingsVersion
@@ -105,6 +117,7 @@ if (window === window.top && !alreadyLoaded) {
     if (window.location.href === lastUrl) return
     lastUrl = window.location.href
     unmountSelfCiteBall()
+    resetQuoteCard()
     loadFeatures()
   }
   window.addEventListener('popstate', checkCurrentUrl)

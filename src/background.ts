@@ -1,10 +1,10 @@
 import { ARTICLE_URL, shouldOpenArticleOnUpdate } from "./shared/whats-new"
 import { getAiConfig, readAiSettings } from "./shared/ai-defaults"
 import { readStreamLines } from "./shared/stream-lines"
-import { classifyMediumUrl, isMediumHost, isKnownMediumPublicationHost, mediumPathParts, reservedMediumPaths } from "./shared/medium-url"
+import { classifyMediumUrl, isMediumHost, isKnownMediumPublicationHost, mediumPathParts, reservedMediumPaths, mediumPostId, mediumStoryDocumentPatterns } from "./shared/medium-url"
 import { OBSIDIAN_SENT_MESSAGE } from "./shared/obsidian-clip"
 import { createObsidianAdvancedUri } from "./shared/obsidian-uri"
-import { triggerMarkdownDownload } from "./shared/markdown-download"
+import { triggerMarkdownDownload, triggerPngDownload } from "./shared/markdown-download"
 import { sendToTab } from "./shared/injection"
 
 interface Feed {
@@ -86,6 +86,16 @@ const handleSendToObsidian = async (
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'downloadQuoteCard') {
+    if (!sender.tab || !mediumPostId(sender.url || sender.tab.url || '')) {
+      sendResponse({ ok: false, error: 'Quote cards are available on Medium stories.' })
+      return
+    }
+    triggerPngDownload(String(message.title || 'Quote card'), String(message.dataUrl || ''))
+      .then(() => sendResponse({ ok: true }))
+      .catch(error => sendResponse({ ok: false, error: error.message || 'Download failed.' }))
+    return true
+  }
   if (message?.type !== "send-to-obsidian") return
 
   handleSendToObsidian(message, sender)
@@ -123,6 +133,10 @@ chrome.commands.onCommand.addListener(async (command) => {
 
 chrome.contextMenus.onClicked.addListener(async (item, tab) => {
   if (!tab || tab.id == null) return
+  if (item.menuItemId === 'quote_card_menu' && mediumPostId(item.pageUrl || tab.url || '')) {
+    await sendToTab(tab.id, { type: 'showQuoteCard', selectionText: item.selectionText || '' })
+      .catch(e => console.warn('[bg] cannot make quote card', e))
+  }
   if (item.menuItemId === 'summarize_menu') {
     await sendToTab(tab.id, { type: 'showSummaryPanel' }).catch((e) => console.warn('[bg] cannot run on this page', e))
   }
@@ -174,11 +188,31 @@ const ensureOllamaDnrRule = async () => {
   }
 };
 
+// Match patterns cannot distinguish story slugs from profiles; update visibility
+// on tab/navigation changes and verify the story URL again when clicked.
+let quoteMenuUpdate = Promise.resolve()
+const updateQuoteCardMenu = () => quoteMenuUpdate = quoteMenuUpdate.catch(() => {}).then(async () => {
+  const tab = await getCurrentTab()
+  await new Promise<void>(resolve => {
+    chrome.contextMenus.update('quote_card_menu', { visible: !!mediumPostId(tab?.url || '') }, () => {
+      void chrome.runtime.lastError
+      resolve()
+    })
+  })
+})
+chrome.tabs.onActivated.addListener(() => { void updateQuoteCardMenu() })
+chrome.windows.onFocusChanged.addListener(() => { void updateQuoteCardMenu() })
+
 // "Summarize with AI" is shown only while AI Summary is on in Options.
 let menuUpdate = Promise.resolve()
 const ensureContextMenus = () => menuUpdate = menuUpdate.catch(() => {}).then(async () => {
   const { aiSummaryEnabled, obsidianClipperEnabled } = await chrome.storage.local.get({ aiSummaryEnabled: true, obsidianClipperEnabled: false })
   await chrome.contextMenus.removeAll()
+  chrome.contextMenus.create({
+    id: 'quote_card_menu', title: 'Make quote card', contexts: ['selection'],
+    documentUrlPatterns: mediumStoryDocumentPatterns, visible: false,
+  })
+  await updateQuoteCardMenu()
   if (aiSummaryEnabled) {
     chrome.contextMenus.create({
       id: "summarize_menu",
@@ -278,6 +312,7 @@ const bestAuthorFeed = (links: AuthorProfileLink[]): string | null => {
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (tab.active && (changeInfo.url || changeInfo.status)) void updateQuoteCardMenu()
   if (changeInfo.url || changeInfo.status === 'loading') {
     feedVersionByTab.set(tabId, (feedVersionByTab.get(tabId) || 0) + 1)
     lastUrlByTab.delete(tabId)

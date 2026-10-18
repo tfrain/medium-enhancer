@@ -8,10 +8,15 @@ export const sanitizeFilenameForDownload = (value: string): string =>
     .trim()
     .slice(0, 120) || "Untitled"
 
-export const triggerMarkdownDownload = (title: string, markdown: string): Promise<number> => {
-  const filename = `${sanitizeFilenameForDownload(title)}.md`
-  const dataUrl = `data:text/markdown;charset=utf-8,${encodeURIComponent(markdown)}`
+export const triggerMarkdownDownload = (title: string, markdown: string): Promise<number> =>
+  triggerDownload(`${sanitizeFilenameForDownload(title)}.md`, `data:text/markdown;charset=utf-8,${encodeURIComponent(markdown)}`)
 
+export const triggerPngDownload = async (title: string, dataUrl: string): Promise<number> => {
+  if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) throw new Error('Invalid PNG data.')
+  return triggerDownload(`${sanitizeFilenameForDownload(title)}.png`, dataUrl)
+}
+
+const triggerDownload = (filename: string, dataUrl: string): Promise<number> => {
   return new Promise((resolve, reject) => {
     let id: number | undefined
     const finish = (error?: string) => {
