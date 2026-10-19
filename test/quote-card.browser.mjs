@@ -15,7 +15,7 @@ const html = `<!doctype html><html><head><title>A story</title><meta name="autho
   let browser
   try {
     browser = await puppeteer.launch({ executablePath, headless: false, userDataDir: profile,
-      args: ['--headless=new', '--no-first-run', `--disable-extensions-except=${extension}`, `--load-extension=${extension}`] })
+      args: ['--headless=new', '--disable-crash-reporter', '--disable-breakpad', '--no-first-run', `--disable-extensions-except=${extension}`, `--load-extension=${extension}`] })
     const workerTarget = await browser.waitForTarget(t => t.type() === 'service_worker')
     const worker = await workerTarget.worker()
     const extensionId = new URL(workerTarget.url()).host

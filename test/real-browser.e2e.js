@@ -22,7 +22,7 @@ const ok = (name, cond, extra = '') => {
   const profile = fs.mkdtempSync(path.join(OUT, 'profile-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     executablePath: EXE, headless: false,
-    args: ['--headless=new', `--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
+    args: ['--headless=new', '--disable-crash-reporter', '--disable-breakpad', `--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
     userAgent: undefined,
   });
   let [sw] = ctx.serviceWorkers();
