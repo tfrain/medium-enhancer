@@ -90,7 +90,7 @@ const html = `<!doctype html><html><head><title>A story</title><meta name="autho
     await options.goto(`chrome-extension://${extensionId}/options.html`)
     await options.waitForSelector('#pro-key')
     assert.ok(await options.evaluate(() => document.body.textContent.includes('Not unlocked')))
-    assert.equal(await options.$$eval('a', es => es.filter(e => e.textContent === 'Get a key').length), 0)
+    assert.deepEqual(await options.$$eval('a', es => es.filter(e => e.textContent === 'Get a key').map(e => e.href)), ['https://buy.stripe.com/6oU00j1iRarUfNR2X54ow01'])
     await options.type('#pro-key', 'invalid')
     await options.click('button[type="submit"]')
     await options.waitForFunction(() => document.body.textContent.includes('That key did not work'))

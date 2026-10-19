@@ -22,8 +22,9 @@ try {
   assert.equal(await sha256Hex(key), hash)
   assert.equal(PRO_KEYS[0].hash, '956d90ec4a1b343877f842c93cab67aca6f7fc9d5991bdc84b871e8e020d7ac4')
   assert.equal(PRO_KEYS[0].validUntil, '2027-12-31')
-  assert.equal(PRO_GET_KEY_URL, '')
-  assert.equal(canGetProKey(), false)
+  assert.equal(PRO_GET_KEY_URL, 'https://buy.stripe.com/6oU00j1iRarUfNR2X54ow01')
+  assert.equal(canGetProKey(), true)
+  assert.equal(canGetProKey(''), false)
   assert.equal(canGetProKey('https://example.com'), true)
   assert.equal((await keyStatus(key, active, keys)).state, 'active')
   // Fault injection: ignoring validUntil would incorrectly keep this active.

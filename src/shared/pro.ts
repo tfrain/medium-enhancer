@@ -7,7 +7,7 @@ export type ProStatus = { state: 'none' | 'active' | 'expired'; key?: string; va
 export const PRO_KEYS: readonly ProKey[] = [
   { hash: '956d90ec4a1b343877f842c93cab67aca6f7fc9d5991bdc84b871e8e020d7ac4', validUntil: '2027-12-31' },
 ]
-export const PRO_GET_KEY_URL = ''
+export const PRO_GET_KEY_URL = 'https://buy.stripe.com/6oU00j1iRarUfNR2X54ow01'
 export const canGetProKey = (url: string = PRO_GET_KEY_URL): boolean => !!url.trim()
 
 export const sha256Hex = async (text: string): Promise<string> => {
