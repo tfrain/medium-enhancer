@@ -61,6 +61,17 @@ const html = `<!doctype html><html><head><title>A story</title><meta name="autho
     await page.keyboard.press('Escape')
     await page.waitForFunction(() => !document.getElementById('__me_quote_card_panel__'))
     assert.equal(await page.evaluate(() => document.activeElement.id), 'before', 'close restores focus')
+    // No selection: hover offers a whole-paragraph card, including all its text.
+    await select('a1b2', true)
+    await page.hover('#a1b2')
+    await page.waitForSelector('#__me_quote_card_hover__', { visible: true })
+    assert.equal(await page.$eval('#__me_quote_card_hover__', e => e.getAttribute('aria-label')), 'Make a quote card from this paragraph')
+    await page.click('#__me_quote_card_hover__')
+    await page.waitForSelector('#__me_quote_card_panel__ canvas')
+    assert.equal(await page.$eval('#__me_quote_card_panel__ canvas', e => e.getAttribute('aria-label')), 'Quote by Test Author: A useful paragraph with enough words for a quote card.')
+    await page.waitForFunction(() => document.getElementById('__me_quote_card_hover__')?.hidden)
+    await page.keyboard.press('Escape')
+    await page.waitForFunction(() => !document.getElementById('__me_quote_card_panel__'))
     for (const [startId, endId] of [['a1b2', 'excluded'], ['excluded', 'after'], ['a1b2', 'after'], ['a1b2', 'editor']]) {
       await page.evaluate((startId, endId) => {
         const range = document.createRange()
@@ -95,7 +106,7 @@ const html = `<!doctype html><html><head><title>A story</title><meta name="autho
     await options.click('button[type="submit"]')
     await options.waitForFunction(() => document.body.textContent.includes('That key did not work'))
     assert.deepEqual(errors, [])
-    console.log('PASS offline browser: selection, Canvas, locked choices, attribution, paragraph fallback, truncation, SPA cleanup and Pro Options')
+    console.log('PASS offline browser: selection, paragraph hover, Canvas, locked choices, attribution, paragraph fallback, truncation, SPA cleanup and Pro Options')
   } finally {
     if (browser) await browser.close()
     fs.rmSync(profile, { recursive: true, force: true })

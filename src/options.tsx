@@ -15,6 +15,11 @@ type Capability = {
 
 const CAPABILITIES: Capability[] = [
 	{
+		key: "quoteCardHoverEnabled",
+		label: "Show card icon when hovering a paragraph",
+		description: "On Medium stories, make a quote card from a whole paragraph. Select text to quote only part of it.",
+	},
+	{
 		key: "aiSummaryEnabled",
 		label: "AI Summary",
 		description: "Adds \"Summarize with AI\" to the right-click menu and the keyboard shortcut.",

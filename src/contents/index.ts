@@ -2,7 +2,8 @@ import { showToast } from './util/toast'
 import { AI_PRESETS } from './ui/ai-presets'
 import { extractArticle, extractArticleTextForAI } from './lib/extract'
 import { disposePanel, showAiPanel } from './ui/summary-panel'
-import { mountQuoteCardButton, openQuoteCardFromSelection, resetQuoteCard } from './ui/quote-card-panel'
+import { mountQuoteCardButton, openQuoteCardFromSelection, resetQuoteCard, setQuoteCardHoverEnabled } from './ui/quote-card-panel'
+import { quoteStoryRoot } from './lib/quote-card'
 import { mountSelfCiteBall, unmountSelfCiteBall } from './ui/self-cite-panel'
 import { clipCurrentMediumArticleAsMarkdown } from './markdown/medium-to-markdown'
 import { sendClipToObsidian } from '../shared/obsidian-clip'
@@ -82,6 +83,7 @@ if (window === window.top && !alreadyLoaded) {
   )
 
   const applyFeaturesForCurrentSite = (items) => {
+    setQuoteCardHoverEnabled(items.quoteCardHoverEnabled)
     if (items.selfCiteEnabled) {
       mountSelfCiteBall() // no-ops itself when not on a Medium editor page
     } else {
@@ -91,6 +93,7 @@ if (window === window.top && !alreadyLoaded) {
 
   const SETTINGS_DEFAULTS = {
     selfCiteEnabled: true,
+    quoteCardHoverEnabled: true,
   }
 
   mountQuoteCardButton()
@@ -105,17 +108,33 @@ if (window === window.top && !alreadyLoaded) {
   loadFeatures()
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !changes.selfCiteEnabled) return
+    if (area !== 'local' || !(changes.selfCiteEnabled || changes.quoteCardHoverEnabled)) return
     // Invalidate pending settings reads and close immediately on disable.
     settingsVersion++
-    applyFeaturesForCurrentSite({ selfCiteEnabled: changes.selfCiteEnabled.newValue ?? true })
+    if (changes.selfCiteEnabled) {
+      if (changes.selfCiteEnabled.newValue ?? true) mountSelfCiteBall()
+      else unmountSelfCiteBall()
+    }
+    if (changes.quoteCardHoverEnabled) setQuoteCardHoverEnabled(changes.quoteCardHoverEnabled.newValue ?? true)
+    loadFeatures()
   })
 
   // Re-check SPA navigation, including transitions between two editor drafts.
   let lastUrl = window.location.href
+  let lastQuoteRoot = quoteStoryRoot()
   const checkCurrentUrl = () => {
-    if (window.location.href === lastUrl) return
+    const root = quoteStoryRoot()
+    if (window.location.href === lastUrl) {
+      // Medium can insert or replace the article after its URL has changed.
+      if (root !== lastQuoteRoot) {
+        lastQuoteRoot = root
+        resetQuoteCard()
+        loadFeatures()
+      }
+      return
+    }
     lastUrl = window.location.href
+    lastQuoteRoot = root
     unmountSelfCiteBall()
     resetQuoteCard()
     disposePanel()

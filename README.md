@@ -8,6 +8,7 @@ Medium Enhancer is a browser extension that turns any long-form article page int
 - **Markdown Export**: Right-click → "Convert Page to Markdown", or use the popup button. Downloads a `.md` file, or sends it straight to your Obsidian vault (needs the Advanced Obsidian URI plugin).
 - **RSS Feed Discovery**: Click the extension icon on a Medium article to find the author's and publication's RSS feeds.
 - **Quote cards / Pro**: Turn a story selection into a PNG with author and story attribution. Cards are generated locally in the browser with no network request. Pro adds styles, sizes, and watermark removal.
+  Hover a paragraph to see the card icon; selection still works for part of a paragraph. The hover icon can be turned off in Options.
 - **Cite My Story** (for Medium writers): While editing a draft, list your own past stories ranked by relevance to the draft title, and copy a link that Medium turns into an embed card.
 
 ## Permissions

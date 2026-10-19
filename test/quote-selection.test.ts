@@ -35,6 +35,10 @@ try {
   assert.equal(readQuoteCard(), null, 'excluded subtree between two valid endpoints rejects the range')
   crossesNoise = false
   assert.ok(readQuoteCard())
+  range.collapsed = true
+  assert.equal(readQuoteCard(start).quote, 'Story text', 'collapsed selection uses the entire fallback paragraph')
+  range.collapsed = false
+  assert.equal(readQuoteCard(start).quote, 'Story text and more', 'non-collapsed selection keeps the existing selection path')
   console.log('PASS quote selections reject excluded starts, ends and intersected subtrees')
 } catch (error) {
   console.error('FAIL quote selection:', error)

@@ -1,4 +1,4 @@
-import { AI_NOISE_SELECTORS } from '../../shared/article-noise'
+import { QUOTE_NOISE_SELECTORS } from '../../shared/quote-hover'
 import { buildParagraphLink, mediumPostId } from '../../shared/medium-url'
 import { findParagraphId, normalizeQuote, type QuoteCard } from '../../shared/quote-card'
 
@@ -7,8 +7,6 @@ const meta = (name: string) => document.querySelector<HTMLMetaElement>(`meta[nam
 
 export const quoteStoryRoot = (): HTMLElement | null =>
   mediumPostId(window.location.href) ? document.querySelector('article') : null
-
-const QUOTE_NOISE_SELECTORS = AI_NOISE_SELECTORS + ', [contenteditable="true"], [data-testid*="editor" i], [aria-label*="editor" i], [class*="editor" i], [id*="editor" i]'
 
 const selectionElement = (node: Node | null): Element | null =>
   node?.nodeType === Node.ELEMENT_NODE ? node as Element : node?.parentElement || null

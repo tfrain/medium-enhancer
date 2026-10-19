@@ -2,6 +2,7 @@ import { isPro } from '../../shared/pro'
 import { normalizeQuote, QUOTE_SIZES, QUOTE_TEMPLATES, renderQuoteCard, type QuoteCard, type QuoteSize, type QuoteTemplate } from '../../shared/quote-card'
 import { readQuoteCard } from '../lib/quote-card'
 import { showToast } from '../util/toast'
+import { createQuoteHover } from './quote-hover'
 
 const PANEL_ID = '__me_quote_card_panel__'
 const BUTTON_ID = '__me_quote_card_button__'
@@ -49,6 +50,9 @@ let contextCard: { card: QuoteCard; url: string } | null = null
 let requestVersion = 0
 let mounted = false
 let selectionFrame = 0
+let panelOpening = false
+const hover = createQuoteHover(card => { void showQuoteCardPanel(card) }, () => !!panel || panelOpening)
+export const setQuoteCardHoverEnabled = (enabled: boolean) => hover.setEnabled(enabled)
 
 const ensureCSS = () => {
   if (document.getElementById(`${PANEL_ID}__style`)) return
@@ -60,6 +64,7 @@ const ensureCSS = () => {
 
 const closePanel = () => {
   requestVersion++
+  panelOpening = false
   const cleanup = panelCleanup
   panelCleanup = null
   panel?.remove()
@@ -73,6 +78,8 @@ const pngBlob = (canvas: HTMLCanvasElement): Promise<Blob> => new Promise((resol
 
 export const showQuoteCardPanel = async (card: QuoteCard) => {
   closePanel()
+  panelOpening = true
+  hover.hide()
   const version = requestVersion
   const url = window.location.href
   let pro = false
@@ -207,6 +214,7 @@ export const showQuoteCardPanel = async (card: QuoteCard) => {
   draw()
   document.body.appendChild(root)
   panel = root
+  panelOpening = false
   const refreshPro = async () => {
     const active = await isPro().catch(() => false)
     if (panel === root && pro !== active) { pro = active; draw() }
@@ -269,6 +277,7 @@ const updateSelection = () => {
   button.hidden = false
 }
 const onSelectionChange = () => {
+  if (window.getSelection()?.isCollapsed === false) hover.hide()
   if (!selectionFrame) selectionFrame = window.requestAnimationFrame(updateSelection)
 }
 const onContextMenu = (event: MouseEvent) => {
@@ -293,6 +302,7 @@ export const mountQuoteCardButton = () => {
 }
 
 export const resetQuoteCard = () => {
+  hover.reset()
   closePanel()
   hideButton()
   selectedCard = null
