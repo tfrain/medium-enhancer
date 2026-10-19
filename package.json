@@ -1,8 +1,8 @@
 {
   "name": "medium-enhancer",
   "displayName": "Medium Enhancer",
-  "version": "0.8.3",
-  "description": "AI summaries with Ollama or your own OpenAI/Anthropic key, Markdown and Obsidian export, and RSS feeds for Medium articles.",
+  "version": "0.9.0",
+  "description": "AI summaries, Markdown and Obsidian export, RSS feeds, and local quote cards with optional Pro styles for Medium.",
   "author": "Wesley Wei",
   "scripts": {
     "dev": "plasmo dev",

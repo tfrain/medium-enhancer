@@ -1,3 +1,4 @@
+import { AI_NOISE_SELECTORS } from '../../shared/article-noise'
 import { isDebugging } from '../util/env'
 import { draw } from '../util/debug'
 import { toArray } from '../util/dom/to_array'
@@ -165,28 +166,6 @@ export const extractArticle = function (): HTMLElement | undefined {
   }
   return article
 }
-
-const AI_NOISE_SELECTORS = [
-  'footer',
-  'aside',
-  'nav',
-  'form',
-  'button',
-  'textarea',
-  'input',
-  '[role="dialog"]',
-  '[aria-label*="comment" i]',
-  '[aria-label*="response" i]',
-  '[data-testid*="comment" i]',
-  '[data-testid*="response" i]',
-  '[id*="comment" i]',
-  '[class*="comment" i]',
-  '[class*="response" i]',
-  '[class*="reply" i]',
-  '#__me_summary_ball__',
-  '#__me_ai_menu__',
-  '#__me_summary_panel__',
-].join(', ')
 
 export const extractArticleTextForAI = (articleDom: HTMLElement | undefined): string => {
   if (!articleDom) return ''

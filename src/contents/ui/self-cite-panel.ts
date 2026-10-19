@@ -49,6 +49,7 @@ const CSS = `
   align-items: center;
   gap: 6px;
   user-select: none;
+  border: 0;
   transition: transform 0.15s ease;
 }
 #${BALL_ID}:hover { transform: scale(1.04); }
@@ -79,6 +80,12 @@ const CSS = `
   color: #757575;
 }
 #${PANEL_ID} .me-sc-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  background: #fff;
+  border: 0;
   padding: 10px 14px;
   border-bottom: 1px solid #f2f2f2;
   cursor: pointer;
@@ -113,7 +120,7 @@ const CSS = `
 }
 `
 
-let ballEl: HTMLDivElement | null = null
+let ballEl: HTMLButtonElement | null = null
 let panelEl: HTMLDivElement | null = null
 let requestVersion = 0
 let featureEnabled = false
@@ -221,7 +228,8 @@ const renderPanel = (
       el.appendChild(warn)
     }
     for (const p of posts) {
-      const item = document.createElement('div')
+      const item = document.createElement('button')
+      item.type = 'button'
       item.className = 'me-sc-item'
 
       const title = document.createElement('div')
@@ -296,8 +304,9 @@ export const mountSelfCiteBall = () => {
   const existing = document.getElementById(BALL_ID)
   if (existing) existing.remove()
 
-  const el = document.createElement('div')
+  const el = document.createElement('button')
   el.id = BALL_ID
+  el.type = 'button'
   el.textContent = '🔗 Cite my story'
   el.title = 'Link one of your own best-performing past stories'
   el.addEventListener('click', openPanel)

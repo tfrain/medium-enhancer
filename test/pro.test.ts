@@ -11,8 +11,9 @@ try {
   let local: Record<string, unknown> = {}
   let synced: Record<string, unknown> = {}
   let syncFails = false
+  let localFails = false
   ;(globalThis as any).chrome = { storage: {
-    local: { get: async () => ({ ...local }), set: async (v: any) => { Object.assign(local, v) } },
+    local: { get: async () => { if (localFails) throw new Error('Unavailable'); return { ...local } }, set: async (v: any) => { Object.assign(local, v) } },
     sync: {
       get: async () => { if (syncFails) throw new Error('Unavailable'); return { ...synced } },
       set: async (v: any) => { if (syncFails) throw new Error('Unavailable'); Object.assign(synced, v) },
@@ -46,6 +47,23 @@ try {
   local = {}
   synced = { enhancerProUnlocked: true, enhancerProKey: key }
   assert.equal((await proStatus(expired, keys)).state, 'expired', 'restore must also check expiry')
+  local = { enhancerProUnlocked: true, enhancerProKey: 'stale' }
+  assert.equal((await proStatus(active, keys)).state, 'active', 'stale local must not mask active sync')
+  assert.deepEqual(local, synced)
+  const renewedKey = randomBytes(18).toString('hex').toUpperCase()
+  const renewedKeys = [...keys, { hash: createHash('sha256').update(renewedKey).digest('hex'), validUntil: '2029-12-31' }]
+  local = { enhancerProUnlocked: true, enhancerProKey: key }
+  synced = { enhancerProUnlocked: true, enhancerProKey: renewedKey }
+  assert.equal((await proStatus(expired, renewedKeys)).state, 'active', 'expired local must not mask a synced renewal')
+  assert.deepEqual(local, synced)
+  localFails = true
+  assert.equal((await proStatus(expired, renewedKeys)).state, 'active', 'local read failure must not mask sync')
+  localFails = false
+  local = { enhancerProUnlocked: true, enhancerProKey: 123 }
+  synced = {}
+  assert.equal((await proStatus(active, keys)).state, 'none', 'corrupt local key must not throw')
+  synced = { enhancerProUnlocked: true, enhancerProKey: { bad: true } }
+  assert.equal((await proStatus(active, keys)).state, 'none', 'corrupt sync key must not throw')
   local = {}
   syncFails = true
   assert.equal((await proStatus(active, keys)).state, 'none')

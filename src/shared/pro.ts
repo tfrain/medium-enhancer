@@ -15,7 +15,8 @@ export const sha256Hex = async (text: string): Promise<string> => {
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-export const keyStatus = async (key: string, now = new Date(), keys = PRO_KEYS): Promise<ProStatus> => {
+export const keyStatus = async (key: unknown, now = new Date(), keys = PRO_KEYS): Promise<ProStatus> => {
+  if (typeof key !== 'string') return { state: 'none' }
   const normalized = key.trim().toUpperCase()
   if (!normalized) return { state: 'none' }
   const hash = await sha256Hex(normalized)
@@ -28,23 +29,21 @@ export const keyStatus = async (key: string, now = new Date(), keys = PRO_KEYS):
   }
 }
 
-const savedUnlock = async () => {
-  const local = await chrome.storage.local.get(['enhancerProUnlocked', 'enhancerProKey'])
-  if (local.enhancerProUnlocked === true) return local
-  // A fresh install on a synced Chrome profile: restore the buyer's saved key.
-  try {
-    const synced = await chrome.storage.sync.get(['enhancerProUnlocked', 'enhancerProKey'])
-    if (synced.enhancerProUnlocked === true) {
-      await chrome.storage.local.set({ enhancerProUnlocked: true, enhancerProKey: synced.enhancerProKey || '' })
-      return synced
-    }
-  } catch { /* sync unavailable: local only */ }
-  return null
-}
-
 export const proStatus = async (now = new Date(), keys = PRO_KEYS): Promise<ProStatus> => {
-  const saved = await savedUnlock()
-  return saved ? keyStatus(saved.enhancerProKey || '', now, keys) : { state: 'none' }
+  const read = async (area: chrome.storage.StorageArea): Promise<ProStatus> => {
+    try {
+      const saved = await area.get(['enhancerProUnlocked', 'enhancerProKey'])
+      return saved?.enhancerProUnlocked === true ? await keyStatus(saved.enhancerProKey, now, keys) : { state: 'none' }
+    } catch { return { state: 'none' } }
+  }
+  const local = await read(chrome.storage.local)
+  if (local.state === 'active') return local
+  const synced = await read(chrome.storage.sync)
+  if (synced.state === 'active') {
+    try { await chrome.storage.local.set({ enhancerProUnlocked: true, enhancerProKey: synced.key }) } catch { /* sync is enough */ }
+    return synced
+  }
+  return local.state === 'expired' ? local : synced
 }
 
 export const isPro = async (now = new Date(), keys = PRO_KEYS): Promise<boolean> =>

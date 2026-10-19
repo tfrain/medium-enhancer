@@ -120,9 +120,13 @@ const Options = () => {
 		};
 		refresh();
 		window.addEventListener('focus', refresh);
+		document.addEventListener('visibilitychange', refresh);
+		const expiryCheck = window.setInterval(refresh, 60000);
 		chrome.storage.onChanged.addListener(onChanged);
 		return () => {
 			window.removeEventListener('focus', refresh);
+			document.removeEventListener('visibilitychange', refresh);
+			window.clearInterval(expiryCheck);
 			chrome.storage.onChanged.removeListener(onChanged);
 		};
 	}, []);

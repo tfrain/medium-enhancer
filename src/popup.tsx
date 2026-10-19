@@ -1,5 +1,6 @@
 import { OBSIDIAN_SENT_MESSAGE } from "./shared/obsidian-clip"
 import { ARTICLE_URL } from "./shared/whats-new"
+import { inspectMediumPage } from "./shared/medium-page"
 import { classifyMediumUrl } from "./shared/medium-url"
 import "./popup.css"
 import { useState, useEffect } from "react"
@@ -108,6 +109,7 @@ function IndexPopup() {
     let fallbackTimer: ReturnType<typeof setTimeout> | undefined
     let activeTabId: number | undefined
     let activeTabIsMedium = false
+    let disposed = false
 
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       if (!tab || !tab.url) { setIsMediumPage(false); return }
@@ -127,6 +129,16 @@ function IndexPopup() {
       } else {
         setIsMediumPage(false)
         setFeeds([])
+        if (tab.id === undefined) return
+        chrome.scripting.executeScript({ target: { tabId: tab.id }, func: inspectMediumPage })
+          .then(results => {
+            if (disposed) return
+            const page = results[0]?.result
+            activeTabIsMedium = !!page?.isMediumStory
+            setIsMediumPage(activeTabIsMedium)
+            if (activeTabIsMedium) setFeeds(page.feeds.map(url => ({ name: 'RSS Feed', url: url.replace(/^https?:\/\//i, ''), type: 'publication' })))
+          })
+          .catch(() => { if (!disposed) setIsMediumPage(false) })
       }
     })
 
@@ -145,6 +157,7 @@ function IndexPopup() {
 
     chrome.storage.onChanged.addListener(storageListener)
     return () => {
+      disposed = true
       chrome.storage.onChanged.removeListener(storageListener)
       clearTimeout(fallbackTimer)
     }

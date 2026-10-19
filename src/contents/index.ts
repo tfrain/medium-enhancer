@@ -1,7 +1,7 @@
 import { showToast } from './util/toast'
 import { AI_PRESETS } from './ui/ai-presets'
 import { extractArticle, extractArticleTextForAI } from './lib/extract'
-import { showAiPanel } from './ui/summary-panel'
+import { disposePanel, showAiPanel } from './ui/summary-panel'
 import { mountQuoteCardButton, openQuoteCardFromSelection, resetQuoteCard } from './ui/quote-card-panel'
 import { mountSelfCiteBall, unmountSelfCiteBall } from './ui/self-cite-panel'
 import { clipCurrentMediumArticleAsMarkdown } from './markdown/medium-to-markdown'
@@ -118,6 +118,7 @@ if (window === window.top && !alreadyLoaded) {
     lastUrl = window.location.href
     unmountSelfCiteBall()
     resetQuoteCard()
+    disposePanel()
     loadFeatures()
   }
   window.addEventListener('popstate', checkCurrentUrl)

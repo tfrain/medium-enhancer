@@ -1,4 +1,5 @@
-import { renderMarkdownNode, selectSubtitle, type MarkdownNode } from "../../shared/markdown-content"
+import { inspectMediumPage } from "../../shared/medium-page"
+import { MEDIUM_SUBTITLE_SELECTOR, renderMarkdownNode, selectSubtitle, type MarkdownNode } from "../../shared/markdown-content"
 import { extractArticle } from "../lib/extract"
 
 export type MediumMarkdownClip = {
@@ -39,10 +40,10 @@ const getArticleTitle = (article: HTMLElement): string => {
 }
 
 const getArticleSubtitle = (article: HTMLElement, title: string): string => {
-  const candidates = Array.from(article.querySelectorAll('h2, p, .graf--subtitle, [data-testid="storySubtitle"]'))
+  const candidates = Array.from(article.querySelectorAll(`h2, p, ${MEDIUM_SUBTITLE_SELECTOR}`))
     .map(node => ({
       text: node.textContent || '',
-      mediumSubtitle: node.matches('.graf--subtitle, [data-testid="storySubtitle"]'),
+      mediumSubtitle: node.matches(MEDIUM_SUBTITLE_SELECTOR),
     }))
   return selectSubtitle(window.location.hostname, candidates, title, getMetaContent('meta[name="description"]'))
 }
@@ -162,7 +163,8 @@ const bodyMarkdownFrom = (root: HTMLElement, title: string): string => {
 }
 
 export const clipCurrentMediumArticleAsMarkdown = (): MediumMarkdownClip => {
-  const article = extractArticle() || findFallbackArticleRoot()
+  const mediumArticle = inspectMediumPage().isMediumStory ? document.querySelector<HTMLElement>('article') : null
+  const article = mediumArticle || extractArticle() || findFallbackArticleRoot()
   if (!article) {
     throw new Error("No article-like content found on this page.")
   }
@@ -179,7 +181,7 @@ export const clipCurrentMediumArticleAsMarkdown = (): MediumMarkdownClip => {
 
   cloned.querySelector("h1")?.remove()
   if (subtitle) {
-    const subtitleNode = Array.from(cloned.querySelectorAll('h2, p, .graf--subtitle, [data-testid="storySubtitle"]'))
+    const subtitleNode = Array.from(cloned.querySelectorAll(`h2, p, ${MEDIUM_SUBTITLE_SELECTOR}`))
       .find((node) => normalizeText(node.textContent || "") === subtitle)
     subtitleNode?.remove()
   }

@@ -1,12 +1,13 @@
 # Medium Enhancer: Privacy Policy
 
-Last updated: 16 October 2026
+Last updated: 19 October 2026
 
 Medium Enhancer is a Chrome extension that summarizes articles with AI, exports them as Markdown or to Obsidian, finds RSS feeds, and helps Medium writers link their own past stories.
 
 ## What the extension reads
 
 - **The page you are on**, only when you ask for a summary or a Markdown export. It reads the article text and title.
+- **Story selections for quote cards**, on supported Medium story pages. Quote cards are generated locally in the browser with no network request.
 - **Your own Medium stories**, only in the "Cite My Story" panel while you edit a draft, using the Medium session you are already signed in with.
 
 ## Where data goes
@@ -19,6 +20,8 @@ Medium Enhancer is a Chrome extension that summarizes articles with AI, exports 
 
 Your settings (AI provider, model, API key, Obsidian vault) and found RSS feeds are kept in Chrome's local extension storage on your device. Your API key is stored only there and is sent only to the provider it belongs to.
 
+The Pro key is stored in `chrome.storage.local` and `chrome.storage.sync`. When Chrome sync is on, the key follows your Chrome profile to other devices. Pro validation happens locally.
+
 ## What the extension does not do
 
 - It does not send any data to the developer or to any party you did not choose.
@@ -28,4 +31,4 @@ Your settings (AI provider, model, API key, Obsidian vault) and found RSS feeds 
 
 ## Contact
 
-Questions: open an issue at https://github.com/tfrain/medium-enhancer/issues
+Feedback and questions go to the comments of the [release article](https://medium.com/programmers-career/display-medium-toc-and-rss-feeds-medium-enhancer-f06012a2780c).

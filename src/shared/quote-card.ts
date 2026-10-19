@@ -9,8 +9,11 @@ export const findParagraphId = (start: ParagraphAncestor | null, boundary: Parag
   return ''
 }
 
+const graphemes = (text: string): string[] =>
+  Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), part => part.segment)
+
 export const normalizeQuote = (text: string, maxChars = 600) => {
-  const chars = Array.from(text.replace(/\s+/g, ' ').trim())
+  const chars = graphemes(text.replace(/\s+/g, ' ').trim())
   const truncated = chars.length > maxChars
   return { text: truncated ? chars.slice(0, maxChars - 1).join('').trimEnd() + '…' : chars.join(''), truncated }
 }
@@ -30,8 +33,8 @@ export const layoutQuote = (
     const candidate = line ? `${line} ${word}` : word
     if (measure(candidate) <= maxWidth) { line = candidate; continue }
     if (line) { lines.push(line); line = '' }
-    // Split long URLs and text without spaces, including CJK, at code points.
-    for (const char of word) {
+    // Split long URLs and text without spaces, including CJK, at grapheme boundaries.
+    for (const char of graphemes(word)) {
       if (line && measure(line + char) > maxWidth) { lines.push(line); line = '' }
       line += char
     }
@@ -40,7 +43,7 @@ export const layoutQuote = (
   const truncated = normalized.truncated || lines.length > maxLines
   if (lines.length > maxLines) {
     lines.length = maxLines
-    const chars = Array.from(lines[maxLines - 1])
+    const chars = graphemes(lines[maxLines - 1])
     while (chars.length && measure(chars.join('').trimEnd() + '…') > maxWidth) chars.pop()
     lines[maxLines - 1] = chars.join('').trimEnd() + '…'
   }

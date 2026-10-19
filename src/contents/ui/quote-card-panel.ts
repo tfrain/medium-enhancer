@@ -60,10 +60,11 @@ const ensureCSS = () => {
 
 const closePanel = () => {
   requestVersion++
-  panelCleanup?.()
+  const cleanup = panelCleanup
   panelCleanup = null
   panel?.remove()
   panel = null
+  cleanup?.()
 }
 
 const pngBlob = (canvas: HTMLCanvasElement): Promise<Blob> => new Promise((resolve, reject) => {
@@ -77,10 +78,13 @@ export const showQuoteCardPanel = async (card: QuoteCard) => {
   let pro = false
   try { pro = await isPro() } catch { /* free mode if storage is unavailable */ }
   if (version !== requestVersion || window.location.href !== url) return
+  const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   ensureCSS()
   const root = document.createElement('div')
   root.id = PANEL_ID
   root.setAttribute('role', 'dialog')
+  root.setAttribute('aria-modal', 'true')
+  root.tabIndex = -1
   root.setAttribute('aria-label', 'Make quote card')
   const header = document.createElement('div')
   header.className = 'me-qc-header'
@@ -213,12 +217,33 @@ export const showQuoteCardPanel = async (card: QuoteCard) => {
   window.addEventListener('focus', refreshPro)
   chrome.storage.onChanged.addListener(onProChanged)
   const expiryCheck = window.setInterval(refreshPro, 60000)
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      closePanel()
+      onSelectionChange()
+    } else if (event.key === 'Tab') {
+      const controls = Array.from(root.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), a[href], [tabindex="0"]'))
+      const first = controls[0]
+      const last = controls.at(-1)
+      if (!controls.includes(document.activeElement as HTMLElement) || (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+        event.preventDefault()
+        ;(event.shiftKey ? last : first)?.focus()
+      }
+    }
+  }
+  document.addEventListener('keydown', onKeyDown, true)
   panelCleanup = () => {
     window.removeEventListener('focus', refreshPro)
     chrome.storage.onChanged.removeListener(onProChanged)
     window.clearInterval(expiryCheck)
+    document.removeEventListener('keydown', onKeyDown, true)
+    if (previousFocus === button && button) button.hidden = false
+    if (previousFocus?.isConnected) previousFocus.focus()
   }
   if (button) button.hidden = true
+  root.focus()
 }
 
 const hideButton = () => { if (button) button.hidden = true }

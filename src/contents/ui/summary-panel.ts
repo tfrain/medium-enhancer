@@ -124,10 +124,12 @@ type PanelRefs = {
   bodyTranslation: HTMLDivElement | null  // null when translation is disabled
   status: HTMLDivElement
   regenerateBtn: HTMLButtonElement
+  cleanup: () => void
 }
 
 let current: PanelRefs | null = null
-let activePorts: chrome.runtime.Port[] = []
+const activePorts = new Map<chrome.runtime.Port, () => void>()
+let requestVersion = 0
 
 const ensureStyle = () => {
   if (document.getElementById(`${PANEL_ID}__style`)) return
@@ -138,15 +140,14 @@ const ensureStyle = () => {
 }
 
 const disconnectPorts = () => {
-  for (const p of activePorts) {
-    try { p.disconnect() } catch {}
-  }
-  activePorts = []
+  for (const cancel of [...activePorts.values()]) cancel()
 }
 
-const disposePanel = () => {
+export const disposePanel = () => {
+  requestVersion++
   disconnectPorts()
   if (current) {
+    current.cleanup()
     current.root.remove()
     current = null
   }
@@ -265,14 +266,16 @@ const buildPanel = (headline: string, translationLanguage: string): PanelRefs =>
     startRight = window.innerWidth - rect.right
     e.preventDefault()
   })
-  window.addEventListener('mousemove', (e) => {
+  const onMouseMove = (e: MouseEvent) => {
     if (!dragging) return
     const dx = e.clientX - startX
     const dy = e.clientY - startY
     root.style.top = `${Math.max(0, startTop + dy)}px`
     root.style.right = `${Math.max(0, startRight - dx)}px`
-  })
-  window.addEventListener('mouseup', () => { dragging = false })
+  }
+  const onMouseUp = () => { dragging = false }
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
 
   return {
     root,
@@ -280,6 +283,10 @@ const buildPanel = (headline: string, translationLanguage: string): PanelRefs =>
     bodyTranslation: translation ? translation.content : null,
     status,
     regenerateBtn,
+    cleanup: () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    },
   }
 }
 
@@ -306,20 +313,20 @@ const streamInto = (
   cfg: AiProviderConfig,
   payload: { instruction: string; title: string; text: string; context?: string },
   onStatus: (msg: string, isError?: boolean) => void,
+  isCurrent: () => boolean,
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
     let accumulated = ''
     let started = false
     let settled = false
     const port = chrome.runtime.connect({ name: 'summarize' })
-    activePorts.push(port)
-
     const cleanup = () => {
-      activePorts = activePorts.filter((p) => p !== port)
+      activePorts.delete(port)
+      port.onMessage.removeListener(onMessage)
+      port.onDisconnect.removeListener(onDisconnect)
     }
-
-    port.onMessage.addListener((msg) => {
-      if (!current) return
+    const onMessage = (msg) => {
+      if (settled || !isCurrent()) return
       if (msg.type === 'chunk') {
         if (!started) {
           started = true
@@ -340,23 +347,40 @@ const streamInto = (
         onStatus('Error: ' + (msg.error || 'unknown'), true)
         reject(new Error(msg.error || 'unknown'))
       }
-    })
-    port.onDisconnect.addListener(() => {
+    }
+    const onDisconnect = () => {
+      const error = chrome.runtime.lastError?.message || 'AI connection disconnected before completing. Try again.'
       cleanup()
       if (!settled) {
         settled = true
-        reject(new Error('cancelled'))
+        if (isCurrent()) onStatus('Error: ' + error, true)
+        reject(new Error(error))
       }
+    }
+    activePorts.set(port, () => {
+      settled = true
+      cleanup()
+      reject(new Error('cancelled'))
+      try { port.disconnect() } catch {}
     })
-    port.postMessage({
-      instruction: payload.instruction,
-      title: payload.title,
-      text: payload.text,
-      context: payload.context,
-      baseUrl: cfg.baseUrl,
-      model: cfg.model,
-      provider: cfg.provider,
-    })
+    port.onMessage.addListener(onMessage)
+    port.onDisconnect.addListener(onDisconnect)
+    try {
+      port.postMessage({
+        instruction: payload.instruction,
+        title: payload.title,
+        text: payload.text,
+        context: payload.context,
+        baseUrl: cfg.baseUrl,
+        model: cfg.model,
+        provider: cfg.provider,
+      })
+    } catch (error) {
+      settled = true
+      cleanup()
+      try { port.disconnect() } catch {}
+      reject(error)
+    }
   })
 }
 
@@ -368,18 +392,30 @@ const buildTranslateInstruction = (targetLanguage: string) =>
 export const showAiPanel = async (req: AiPanelRequest) => {
   disposePanel()
 
-  const [aiSettings, cfgRaw] = await Promise.all([
-    readAiSettings(),
-    chrome.storage.local.get({ translationLanguage: '' }),
-  ])
+  const version = requestVersion
+  let aiSettings, cfgRaw
+  try {
+    ;[aiSettings, cfgRaw] = await Promise.all([
+      readAiSettings(),
+      chrome.storage.local.get({ translationLanguage: '' }),
+    ])
+  } catch {
+    if (version !== requestVersion) return
+    current = buildPanel(req.headline, '')
+    current.status.textContent = 'Error: Could not read AI settings. Try again.'
+    current.status.classList.add('me-sum-error')
+    current.regenerateBtn.disabled = true
+    return
+  }
+  if (version !== requestVersion) return
   const translationLanguage: string = cfgRaw.translationLanguage ?? ''
   current = buildPanel(req.headline, translationLanguage)
   const panel = current
   let runId = 0
   const setStatus = (msg: string, isError = false) => {
-    if (!current) return
-    current.status.textContent = msg
-    current.status.classList.toggle('me-sum-error', isError)
+    if (current !== panel) return
+    panel.status.textContent = msg
+    panel.status.classList.toggle('me-sum-error', isError)
   }
   const resetPanelContent = () => {
     panel.bodyEn.classList.add('me-sum-pending')
@@ -415,7 +451,10 @@ export const showAiPanel = async (req: AiPanelRequest) => {
   }
 
   const runGeneration = async () => {
+    if (current !== panel) return
     const thisRun = ++runId
+    const isCurrent = () => current === panel && thisRun === runId
+    const reportStatus = (msg: string, isError = false) => { if (isCurrent()) setStatus(msg, isError) }
     disconnectPorts()
     resetPanelContent()
     panel.regenerateBtn.disabled = true
@@ -431,9 +470,10 @@ export const showAiPanel = async (req: AiPanelRequest) => {
           text: req.articleText,
           context: req.extraContext,
         },
-        setStatus,
+        reportStatus,
+        isCurrent,
       )
-      if (!current || thisRun !== runId) return
+      if (!isCurrent()) return
       if (!english.trim() || !panel.bodyTranslation) {
         setStatus('Done.')
         return
@@ -450,20 +490,21 @@ export const showAiPanel = async (req: AiPanelRequest) => {
             title: '',
             text: english,
           },
-          setStatus,
+          reportStatus,
+          isCurrent,
         )
-        if (current && thisRun === runId) setStatus('Done.')
+        if (isCurrent()) setStatus('Done.')
       } catch (error: any) {
         if (error?.message !== 'cancelled') {
-          // streamInto already reported the error via onStatus
+          reportStatus('Error: ' + (error?.message || 'Request failed.'), true)
         }
       }
     } catch (error: any) {
       if (error?.message !== 'cancelled') {
-        // streamInto already reported the error via onStatus
+        reportStatus('Error: ' + (error?.message || 'Request failed.'), true)
       }
     } finally {
-      if (current && thisRun === runId) {
+      if (isCurrent()) {
         panel.regenerateBtn.disabled = false
       }
     }

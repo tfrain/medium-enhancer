@@ -12,11 +12,15 @@ const normalizeText = (value: string): string =>
 const escapeMarkdown = (value: string): string =>
   String(value || "").replace(/([\\`*_{}\[\]()#+\-.!|>])/g, "\\$1")
 const textContent = (node?: MarkdownNode): string =>
-  node ? node.text ?? (node.children || []).map(textContent).join("") : ""
+  node?.tag === "BR" ? "\n" : node ? node.text ?? (node.children || []).map(textContent).join("") : ""
 const findNode = (node: MarkdownNode, tag: string): MarkdownNode | undefined =>
   node.tag === tag
     ? node
     : (node.children || []).map((child) => findNode(child, tag)).find(Boolean)
+
+// Elements Medium marks as a story's subtitle. On 2026-10-19 a live story page used
+// <h2 class="pw-subtitle-paragraph">; the other two are older layouts.
+export const MEDIUM_SUBTITLE_SELECTOR = '.pw-subtitle-paragraph, .graf--subtitle, [data-testid="storySubtitle"]'
 
 export const selectSubtitle = (
   hostname: string,
@@ -24,15 +28,10 @@ export const selectSubtitle = (
   title: string,
   description: string
 ): string => {
-  const medium = /(^|\.)medium\.com$/i.test(hostname)
-  const explicit = candidates.filter((candidate) => candidate.mediumSubtitle)
-  if (!medium && !explicit.length) return ""
-  return (
-    (explicit.length ? explicit : candidates.slice(0, 8))
-      .map((candidate) => normalizeText(candidate.text))
-      .find((text) => text && text !== title && text.length <= 180) ||
-    (medium ? description : "")
-  )
+  return candidates
+    .filter((candidate) => candidate.mediumSubtitle)
+    .map((candidate) => normalizeText(candidate.text))
+    .find((text) => text && text !== title && text.length <= 180) || ""
 }
 
 const linkFor = (href: string | null, sourceUrl: string): string => {

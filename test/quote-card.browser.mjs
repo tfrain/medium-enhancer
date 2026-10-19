@@ -9,7 +9,7 @@ import puppeteer from 'puppeteer-core'
 const extension = path.resolve('build/chrome-mv3-prod')
 const executablePath = path.join(os.homedir(), 'Library/Caches/ms-playwright/chromium-1134/chrome-mac/Chromium.app/Contents/MacOS/Chromium')
 const story = 'https://medium.com/@writer/a-story-abcdef123456'
-const html = `<!doctype html><html><head><title>A story</title><meta name="author" content="Test Author"><link rel="canonical" href="${story}"></head><body><article><h1>A story</h1><a data-testid="publicationName">Test Publication</a><p id="a1b2">A useful paragraph with enough words for a quote card.</p><p id="bad-id">Another paragraph with no Medium paragraph name.</p><p id="c3d4">${'Long quotation text '.repeat(70)}</p></article></body></html>`
+const html = `<!doctype html><html><head><title>A story</title><meta name="author" content="Test Author"><link rel="canonical" href="${story}"></head><body><button id="before">Before</button><article><h1>A story</h1><a data-testid="publicationName">Test Publication</a><p id="a1b2">A useful paragraph with enough words for a quote card.</p><p id="bad-id">Another paragraph with no Medium paragraph name.</p><p id="c3d4">${'Long quotation text '.repeat(70)}</p><div class="responses"><p id="excluded">A response</p></div><p id="after">After response</p><div contenteditable="true"><p id="editor">Editor text</p></div></article></body></html>`
 ;(async () => {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'me-pro-browser-'))
   let browser
@@ -45,13 +45,34 @@ const html = `<!doctype html><html><head><title>A story</title><meta name="autho
       try { await page.waitForSelector('#__me_quote_card_button__', { visible: true, timeout: 500 }); break }
       catch (e) { if (i >= 20) throw e }
     }
+    await page.focus('#before')
     await page.click('#__me_quote_card_button__')
     await page.waitForSelector('#__me_quote_card_panel__ canvas')
+    assert.equal(await page.$eval('#__me_quote_card_panel__', e => e.getAttribute('aria-modal')), 'true')
+    assert.ok(await page.$eval('#__me_quote_card_panel__', e => e.contains(document.activeElement)), 'opening focuses the dialog')
+    await page.keyboard.down('Shift'); await page.keyboard.press('Tab'); await page.keyboard.up('Shift')
+    assert.equal(await page.evaluate(() => document.activeElement.tagName), 'INPUT', 'Shift+Tab from panel wraps to last control')
+    await page.keyboard.press('Tab')
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Close', 'Tab wraps to first control')
     assert.equal(await page.$eval('#__me_quote_card_panel__ input', e => e.value), 'https://medium.com/p/abcdef123456#a1b2')
     assert.equal(await page.$$eval('#__me_quote_card_panel__ button:disabled', es => es.length), 5)
     assert.deepEqual(await page.$eval('#__me_quote_card_panel__ canvas', e => [e.width, e.height]), [1200, 675])
     assert.ok(await page.$eval('#__me_quote_card_panel__', e => e.textContent.includes('Test Author') && e.textContent.includes('Test Publication')))
-    await page.click('#__me_quote_card_panel__ [aria-label="Close"]')
+    await page.keyboard.press('Escape')
+    await page.waitForFunction(() => !document.getElementById('__me_quote_card_panel__'))
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'before', 'close restores focus')
+    for (const [startId, endId] of [['a1b2', 'excluded'], ['excluded', 'after'], ['a1b2', 'after'], ['a1b2', 'editor']]) {
+      await page.evaluate((startId, endId) => {
+        const range = document.createRange()
+        range.setStart(document.getElementById(startId).firstChild, 0)
+        range.setEnd(document.getElementById(endId).firstChild, 3)
+        const selection = window.getSelection()
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }, startId, endId)
+      await page.waitForFunction(() => document.getElementById('__me_quote_card_button__')?.hidden)
+    }
+    await select('a1b2')
     await page.waitForSelector('#__me_quote_card_button__', { visible: true })
     await select('bad-id')
     await page.waitForSelector('#__me_quote_card_button__', { visible: true })
@@ -79,4 +100,4 @@ const html = `<!doctype html><html><head><title>A story</title><meta name="autho
     if (browser) await browser.close()
     fs.rmSync(profile, { recursive: true, force: true })
   }
-})().catch(error => { console.error(error); process.exit(1) })
+})().catch(error => { console.error('FAIL quote-card browser:', error); process.exit(1) })

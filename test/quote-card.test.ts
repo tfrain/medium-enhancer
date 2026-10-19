@@ -14,6 +14,11 @@ try {
   assert.ok(limited.lines.at(-1)?.endsWith('…'))
   assert.equal(limited.truncated, true)
   assert.ok(limited.lines.every(line => measure(line) <= 9))
+  const graphemeMeasure = (text: string) => [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].length
+  assert.deepEqual(layoutQuote('👩‍💻👩‍💻', 2, text => text.length).lines, ['👩‍💻', '👩‍💻'], 'oversized graphemes stay intact')
+  assert.deepEqual(layoutQuote('👩‍💻é👩‍💻é', 1, graphemeMeasure).lines, ['👩‍💻', 'é', '👩‍💻', 'é'])
+  assert.equal(normalizeQuote('👩‍💻éxyz', 3).text, '👩‍💻é…')
+  assert.deepEqual(layoutQuote('👩‍💻éxy', 2, graphemeMeasure, 1).lines, ['👩‍💻…'])
   const capped = normalizeQuote('word '.repeat(200))
   assert.ok(capped.text.length <= 600)
   assert.ok(capped.text.endsWith('…'))

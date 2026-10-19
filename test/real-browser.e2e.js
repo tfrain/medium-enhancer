@@ -14,7 +14,10 @@ const path = require('path'), os = require('os'), fs = require('fs');
 const EXT = path.join(os.homedir(), 'Repos/medium-enhancer/build/chrome-mv3-prod');
 const EXE = path.join(os.homedir(), 'Library/Caches/ms-playwright/chromium-1134/chrome-mac/Chromium.app/Contents/MacOS/Chromium');
 const OUT = process.env.OUT;
-const ok = (name, cond, extra = '') => console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : ''));
+const ok = (name, cond, extra = '') => {
+  console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : ''));
+  if (!cond) process.exitCode = 1;
+};
 (async () => {
   const profile = fs.mkdtempSync(path.join(OUT, 'profile-'));
   const ctx = await chromium.launchPersistentContext(profile, {

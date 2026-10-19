@@ -584,7 +584,15 @@ chrome.runtime.onConnect.addListener((port) => {
 
   port.onMessage.addListener(async (msg: SummarizeMsg) => {
     const { instruction, title, text, context, baseUrl, provider = 'ollama' } = msg
-    const settings = await readAiSettings()
+    let settings
+    try {
+      settings = await readAiSettings()
+    } catch {
+      if (closed) return
+      port.postMessage({ type: 'error', error: 'Could not read AI settings. Try again.' })
+      try { port.disconnect() } catch {}
+      return
+    }
     if (closed) return
     const { apiKey, model } = getAiConfig(settings, provider)
     if (!text || !text.trim()) {

@@ -10,6 +10,7 @@ try {
     children,
     attrs
   })
+  assert.equal(renderMarkdownNode(node("PRE", [text("first()"), node("BR"), node("CODE", [text("second()")])])), "```\nfirst()\nsecond()\n```", "code BR nodes preserve line breaks")
   const image = node("IMG", [], { src: "/img.png", alt: "an image" })
   assert.equal(
     renderMarkdownNode(
