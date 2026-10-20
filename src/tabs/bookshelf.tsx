@@ -20,9 +20,18 @@ function Note({ highlight, onSave }: { highlight: BookshelfHighlight; onSave: (i
     e.preventDefault(); setSaving(true)
     try { await onSave(highlight.id!, note) } finally { setSaving(false) }
   }}>
-    <label>Private note<textarea aria-label="Private note" value={note} onChange={e => setNote(e.target.value)} rows={2} /></label>
+    <label>Private note<textarea aria-label="Private note" value={note} disabled={saving} onChange={e => setNote(e.target.value)} rows={2} /></label>
     <button disabled={saving || note === (highlight.note || '')}>{saving ? 'Saving…' : 'Save note'}</button>
   </form>
+}
+// A closed <details> still puts its children in the DOM; with hundreds of
+// archives that is megabytes of text nobody opened. Render on first open.
+function Archive({ item }: { item: BookshelfEntry }) {
+  const [open, setOpen] = useState(false)
+  return <details onToggle={e => { if ((e.currentTarget as HTMLDetailsElement).open) setOpen(true) }}>
+    <summary>Archived article · {item.wordCount} words · {new Date(item.capturedAt!).toLocaleDateString()}</summary>
+    {open && <pre className="shelf-archive">{item.markdown}</pre>}
+  </details>
 }
 export default function Bookshelf() {
   const [library, setLibrary] = useState<Library>({ items: [], highlights: [], pro: false, enabled: true })
@@ -56,9 +65,12 @@ export default function Bookshelf() {
     document.title = 'Bookshelf · Medium Enhancer'
     const update = () => { refresh().catch(error => setError(error.message)) }
     update()
-    chrome.storage.onChanged.addListener(update)
+    // Library data is in IndexedDB; storage only carries the settings this page shows.
+    const relevant = new Set(['bookshelfEnabled', 'obsidianClipperEnabled', 'enhancerProUnlocked', 'enhancerProKey'])
+    const onStorage = (changes: Record<string, chrome.storage.StorageChange>) => { if (Object.keys(changes).some(key => relevant.has(key))) update() }
+    chrome.storage.onChanged.addListener(onStorage)
     window.addEventListener('focus', update)
-    return () => { chrome.storage.onChanged.removeListener(update); window.removeEventListener('focus', update) }
+    return () => { chrome.storage.onChanged.removeListener(onStorage); window.removeEventListener('focus', update) }
   }, [refresh])
   useEffect(() => {
     // Expiry changes without a storage event; also recheck when a hidden tab returns.
@@ -90,7 +102,7 @@ export default function Bookshelf() {
   }, [library, index, debounced, filter])
   const grouped = useMemo(() => {
     const map = new Map<string, BookshelfHighlight[]>()
-    for (const h of library.highlights) map.set(h.itemKey, [...(map.get(h.itemKey) || []), h])
+    for (const h of library.highlights) { const list = map.get(h.itemKey); if (list) list.push(h); else map.set(h.itemKey, [h]) }
     return map
   }, [library.highlights])
   const perform = async (action: () => Promise<void>) => {
@@ -154,8 +166,7 @@ export default function Bookshelf() {
             setFeedback(OBSIDIAN_SENT_MESSAGE)
           })}>Export to Obsidian</button> {proLabel}</span>}
         </div>
-        {entry.hasArchive && (library.pro ? <details><summary>Archived article · {item.wordCount} words · {new Date(item.capturedAt!).toLocaleDateString()}</summary>
-          <pre className="shelf-archive">{item.markdown}</pre></details> : <p className="shelf-locked">Archived article {proLabel}</p>)}
+        {entry.hasArchive && (library.pro ? <Archive item={item} /> : <p className="shelf-locked">Archived article {proLabel}</p>)}
         {(entry.highlightCount > 0 || !library.pro) && <div className={!library.pro ? 'shelf-locked' : ''}>
           <h3>Private highlights &amp; notes {proLabel}</h3>
           {library.pro && (grouped.get(item.key) || []).map(h => <section className="shelf-highlight" key={h.id}>

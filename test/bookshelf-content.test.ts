@@ -6,7 +6,7 @@ let saved = false
 let conversionFails = false
 let conversions = 0
 const sent: any[] = []
-const paragraph = { id: 'abcd', parentElement: null }
+const paragraph = { id: 'abcd', parentElement: null, closest: () => null }
 const start = { nodeType: 3, parentElement: paragraph }
 const selection = { rangeCount: 1, isCollapsed: false, toString: () => 'A long selection '.repeat(100), getRangeAt: () => ({ startContainer: start }) }
 const { saveCurrentStory, highlightCurrentStory } = loadSource('src/contents/lib/bookshelf.ts', {

@@ -8,7 +8,7 @@ export type BookshelfMessage = { type: 'bookshelf' } & (
   | { action: 'status'; key?: string }
   | { action: 'pageHighlights' }
   | { action: 'save'; metadata: BookshelfMetadata; markdown?: string; archiveOnly?: boolean }
-  | { action: 'highlight'; url: string; text: string; paragraphId?: string }
+  | { action: 'highlight'; url: string; text: string; paragraphId?: string; occurrence?: number }
   | { action: 'read'; key: string; read: boolean }
   | { action: 'delete'; key: string }
   | { action: 'undo'; token: string }
@@ -41,7 +41,7 @@ export const handleBookshelfMessage = async (message: BookshelfMessage, sender: 
     const key = storyKey(sender, sender.url || '')
     if (!enabled || !pro) return { ok: true, highlights: [] }
     const list = await getBookshelfHighlights(key)
-    return { ok: true, highlights: list.map(({ id, text, paragraphId, note }) => ({ id, text, paragraphId, note: note || '' })) }
+    return { ok: true, highlights: list.map(({ id, text, paragraphId, occurrence }) => ({ id, text, paragraphId, occurrence: occurrence || 0 })) }
   }
   if (message.action === 'save' || message.action === 'highlight') {
     if (!enabled) throw new Error('Bookshelf is disabled in Options.')
@@ -94,9 +94,10 @@ export const handleBookshelfMessage = async (message: BookshelfMessage, sender: 
       requireBookshelfPro(pro)
       const settings = await chrome.storage.local.get({ obsidianClipperEnabled: false })
       if (!settings.obsidianClipperEnabled) throw new Error('Enable Save to Obsidian in Options first.')
-      const { items, highlights } = await listBookshelf()
-      const item = items.find(i => i.key === message.key)
+      // One story: read it and its highlights, not the whole library.
+      const item = await getBookshelfItem(message.key)
       if (!item) throw new Error('Story no longer exists.')
+      const highlights = await getBookshelfHighlights(message.key)
       return { ok: true, clip: { title: item.title, author: item.author, domain: new URL(item.url).hostname, markdown: exportMarkdown(item, highlights, pro) } }
     }
     default: throw new Error('Unknown Bookshelf action.')

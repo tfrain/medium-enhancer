@@ -148,7 +148,11 @@ if (window === window.top && !alreadyLoaded) {
   loadFeatures()
   // Feeds/menus: report once Medium has rendered, and whenever this tab comes back.
   reportPage(1000)
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reportPage(0) })
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return
+    reportPage(0)
+    void applyInPageHighlights() // pick up highlights deleted on the Bookshelf page
+  })
   window.addEventListener('focus', () => reportPage(0))
 
   chrome.storage.onChanged.addListener((changes, area) => {

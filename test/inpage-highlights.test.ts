@@ -4,8 +4,9 @@ import { loadSource } from './load-source.ts'
 const mod = loadSource('src/shared/highlight-locate.ts', {})
 // loadSource evaluates in a vm realm; copy results into this realm before deepStrictEqual.
 const local = (v: any) => (v == null ? v : JSON.parse(JSON.stringify(v)))
-const locateText = (hay: string, needle: string) => local(mod.locateText(hay, needle))
+const locateText = (hay: string, needle: string, occurrence?: number) => local(mod.locateText(hay, needle, occurrence))
 const collapseSpace = mod.collapseSpace
+const occurrenceAt = mod.occurrenceAt
 
 // Exact text.
 assert.deepEqual(locateText('Alpha beta gamma.', 'beta'), [6, 10])
@@ -22,6 +23,13 @@ assert.deepEqual(locateText('\n   Lead text here', 'text'), [9, 13])
 assert.deepEqual(locateText('dup and dup', 'dup'), [0, 3])
 assert.equal(locateText('nothing here', 'absent'), null)
 assert.equal(locateText('anything', '   '), null)
+// Repeated words: the occurrence index picks the right copy; out of range falls back to the last.
+const twice = 'go to the store, then go to the park'
+assert.deepEqual(locateText(twice, 'go to the', 1), [22, 31])
+assert.deepEqual(locateText(twice, 'go to the', 5), [22, 31])
+assert.equal(occurrenceAt(twice, 'go to the', 0), 0, 'selection at the first copy')
+assert.equal(occurrenceAt(twice, 'go to the', 22), 1, 'selection at the second copy')
+assert.equal(occurrenceAt(twice, 'go to the', 21), 1, 'a selection starting on the space before the second copy')
 
 // Service: pageHighlights is read-only, story-scoped, and empty for free users.
 let pro = false
@@ -49,8 +57,9 @@ assert.deepEqual((await ask()).highlights, [], 'free users get no marks')
 pro = true
 const got = (await ask()).highlights
 assert.deepEqual(got.map((h: any) => h.id), [1, 2], 'only this story')
-assert.deepEqual(Object.keys(got[0]).sort(), ['id', 'note', 'paragraphId', 'text'], 'no itemKey/createdAt leak to the page')
-assert.equal(got[1].note, '', 'missing note becomes empty string')
+assert.deepEqual(Object.keys(got[0]).sort(), ['id', 'occurrence', 'paragraphId', 'text'], 'no itemKey/createdAt leak to the page')
+assert.ok(!JSON.stringify(got).includes('why it matters'), 'private notes never reach the page')
+assert.equal(got[1].occurrence, 0, 'missing occurrence becomes 0')
 await assert.rejects(() => ask({ ...sender, frameId: 2 }), /story/i, 'iframes cannot read highlights')
 await assert.rejects(() => ask({ url: 'https://evil.example/', tab: { id: 9 } }), /story/i, 'non-story senders cannot read highlights')
 enabled = false

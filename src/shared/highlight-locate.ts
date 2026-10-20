@@ -7,9 +7,10 @@ const SPACE = /[\s ]/
 
 export const collapseSpace = (value: string): string => value.replace(/[\s ]+/g, ' ').trim()
 
-export const locateText = (hay: string, needle: string): [number, number] | null => {
+// Every match of needle in hay, as [start, end) offsets into hay.
+const matchesOf = (hay: string, needle: string): [number, number][] => {
   const wanted = collapseSpace(needle)
-  if (!wanted) return null
+  if (!wanted) return []
   let flat = ''
   const origin: number[] = []
   let lastWasSpace = true // drop leading whitespace
@@ -25,7 +26,22 @@ export const locateText = (hay: string, needle: string): [number, number] | null
       lastWasSpace = false
     }
   }
-  const at = flat.indexOf(wanted)
-  if (at < 0) return null
-  return [origin[at], origin[at + wanted.length - 1] + 1]
+  const hits: [number, number][] = []
+  for (let at = flat.indexOf(wanted); at >= 0; at = flat.indexOf(wanted, at + 1)) {
+    hits.push([origin[at], origin[at + wanted.length - 1] + 1])
+  }
+  return hits
 }
+
+// occurrence: which match to use when the same words appear more than once in
+// a paragraph (0 = first). Falls back to the last match if the paragraph changed.
+export const locateText = (hay: string, needle: string, occurrence = 0): [number, number] | null => {
+  const hits = matchesOf(hay, needle)
+  if (!hits.length) return null
+  return hits[Math.min(Math.max(0, occurrence), hits.length - 1)]
+}
+
+// At capture time: the selection starts at rawStart in the paragraph's text;
+// count the matches that begin before it.
+export const occurrenceAt = (hay: string, needle: string, rawStart: number): number =>
+  matchesOf(hay, needle).filter(([start]) => start < rawStart).length

@@ -1,6 +1,7 @@
 import { bookshelfRequest } from '../../shared/bookshelf-client'
 import { mediumPostId } from '../../shared/medium-url'
 import { findParagraphId } from '../../shared/quote-card'
+import { occurrenceAt } from '../../shared/highlight-locate'
 import { MEDIUM_SUBTITLE_SELECTOR } from '../../shared/markdown-content'
 import { clipCurrentMediumArticleAsMarkdown } from '../markdown/medium-to-markdown'
 import { readQuoteCard, quoteStoryRoot } from './quote-card'
@@ -47,7 +48,17 @@ export const highlightCurrentStory = async (selectionText = '') => {
   if (!article || !selection?.rangeCount || selection.isCollapsed || !readQuoteCard()) throw new Error('Select text inside the story first.')
   const text = selection.toString().replace(/\s+/g, ' ').trim()
   if (selectionText && selectionText.replace(/\s+/g, ' ').trim() !== text) throw new Error('Selection changed. Select the text again.')
-  const start = selection.getRangeAt(0).startContainer
+  const range = selection.getRangeAt(0)
+  const start = range.startContainer
   const element = start.nodeType === Node.ELEMENT_NODE ? start as Element : start.parentElement
-  return bookshelfRequest({ action: 'highlight', url: window.location.href, text, paragraphId: findParagraphId(element, article) })
+  // Which copy of these words was selected, if the paragraph repeats them.
+  let occurrence = 0
+  const block = element?.closest('p, li, blockquote, h2, h3, h4, figcaption')
+  if (block && article.contains(block)) {
+    const before = document.createRange()
+    before.setStart(block, 0)
+    before.setEnd(range.startContainer, range.startOffset)
+    occurrence = occurrenceAt(block.textContent || '', text, before.toString().length)
+  }
+  return bookshelfRequest({ action: 'highlight', url: window.location.href, text, paragraphId: findParagraphId(element, article), occurrence })
 }

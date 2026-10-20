@@ -122,17 +122,19 @@ try {
   await shelf.type('textarea', 'remember the wombat note')
   await click(shelf, 'Save note')
   await shelf.waitForFunction(() => document.querySelector('.shelf-note button').disabled)
-  // In-page highlights (0.10.x): reopening the saved story marks the passage, with the note as its tooltip.
+  // In-page highlights (0.10.x): reopening the saved story marks the passage; the private note never enters the page.
   await page.reload()
   await page.waitForFunction(() => !!document.querySelector('#a1b2 mark.me-shelf-hl'), { polling: 100, timeout: 15000 })
   const marked = await page.evaluate(() => ({
     text: [...document.querySelectorAll('#a1b2 mark.me-shelf-hl')].map(m => m.textContent).join('').replace(/\s+/g, ' ').trim(),
     whole: document.getElementById('a1b2').textContent.replace(/\s+/g, ' ').trim(),
     title: document.querySelector('#a1b2 mark.me-shelf-hl').title,
+    noteInDom: document.documentElement.outerHTML.includes('wombat'),
     other: document.querySelectorAll('#c3d4 mark.me-shelf-hl').length,
   }))
   assert.equal(marked.text, marked.whole, 'the whole highlighted paragraph is marked')
-  assert.equal(marked.title, 'remember the wombat note', 'the note is the tooltip')
+  assert.equal(marked.title, '', 'no tooltip: notes stay out of the page DOM')
+  assert.equal(marked.noteInDom, false, 'page scripts cannot read the private note')
   assert.equal(marked.other, 0, 'unhighlighted paragraphs stay plain')
   await worker.evaluate(() => chrome.storage.local.set({ bookshelfInPageHighlights: false }))
   await page.waitForFunction(() => !document.querySelector('mark.me-shelf-hl'), { polling: 100, timeout: 5000 })
@@ -143,6 +145,10 @@ try {
   await shelf.$eval('input[type="search"]', el => { const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(el, ''); el.dispatchEvent(new Event('input', { bubbles: true })) })
   await shelf.type('input[type="search"]', 'quokka')
   await shelf.waitForFunction(() => document.querySelector('.shelf-snippet')?.textContent.includes('quokka'))
+  // Archives render only once opened (lazy), so open the details first.
+  assert.equal(await shelf.$('.shelf-archive'), null, 'closed archive is not in the DOM')
+  await shelf.click('details summary')
+  await shelf.waitForSelector('.shelf-archive')
   assert.ok(await shelf.$eval('.shelf-archive', el => el.textContent.includes('quokka')))
   await click(shelf, 'Export all (.zip)')
   await shelf.waitForFunction(() => document.body.textContent.includes('ZIP backup saved'))
@@ -155,7 +161,7 @@ try {
   const markdown = zip.subarray(30 + nameSize, 30 + nameSize + dataSize).toString('utf8')
   for (const value of ['title: "A bookshelf story"', 'author: "Test Author"', 'publication: "Test Publication"', 'quokka', 'remember the wombat note', '> -']) assert.ok(markdown.includes(value), value)
   assert.deepEqual(errors, [])
-  console.log('PASS offline Bookshelf: RSS feed via pageReport, copy page as Markdown, in-page highlights with note tooltip and toggle, popup save, read filters, delete/undo, context capture path, test-only Pro archive/highlight, note search, archive search and ZIP download')
+  console.log('PASS offline Bookshelf: RSS feed via pageReport, copy page as Markdown, in-page highlights (note kept out of the page DOM) and toggle, popup save, read filters, delete/undo, context capture path, test-only Pro archive/highlight, note search, archive search and ZIP download')
 } finally {
   if (browser) await browser.close()
   fs.rmSync(root, { recursive: true, force: true })

@@ -166,6 +166,7 @@ export const showQuoteCardPanel = async (card: QuoteCard) => {
   // Auto-close bookkeeping: never close mid-download/copy (see pointerleave below).
   let busy = 0
   let pointerInside = false
+  let leaveDeferred = false // a pointer-leave close that an action postponed
   let afterBusy: (() => void) | null = null
   const action = (label: string, run: () => Promise<void>) => {
     const btn = document.createElement('button')
@@ -260,7 +261,8 @@ export const showQuoteCardPanel = async (card: QuoteCard) => {
   const cancelLeave = () => { window.clearTimeout(leaveTimer); leaveTimer = 0 }
   const closeFromPointer = () => {
     if (panel !== root) return
-    if (busy || (document.activeElement instanceof HTMLInputElement && root.contains(document.activeElement))) return
+    if (busy) { leaveDeferred = true; return }
+    if (document.activeElement instanceof HTMLInputElement && root.contains(document.activeElement)) return
     closePanel()
     onSelectionChange()
   }
@@ -269,8 +271,9 @@ export const showQuoteCardPanel = async (card: QuoteCard) => {
     cancelLeave()
     leaveTimer = window.setTimeout(closeFromPointer, QUOTE_PANEL_LEAVE_MS)
   }
-  const onPointerEnter = () => { pointerInside = true; cancelLeave() }
-  afterBusy = () => { if (!pointerInside) onPointerLeave() }
+  const onPointerEnter = () => { pointerInside = true; leaveDeferred = false; cancelLeave() }
+  // Keyboard-only use never schedules a close: only resume one the pointer started.
+  afterBusy = () => { if (leaveDeferred && !pointerInside) { leaveDeferred = false; onPointerLeave() } }
   const onPointerDownOutside = (event: PointerEvent) => {
     if (panel === root && !root.contains(event.target as Node)) closeFromPointer()
   }
