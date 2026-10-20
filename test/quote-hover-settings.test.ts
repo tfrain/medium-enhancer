@@ -19,12 +19,14 @@ window.top = window
 try {
   loadSource('src/contents/index.ts', {
     window,
+    document: { addEventListener: () => {}, visibilityState: 'visible' },
     chrome: {
       runtime: { onMessage: event() },
       storage: { onChanged: changed, local: { get: (defaults: any, callback: (items: any) => void) => reads.push({ defaults, callback }) } },
     },
   }, {
     './lib/bookshelf': {},
+    './lib/feed-signals': { reportPage: () => {} },
     './lib/inpage-highlights': { applyInPageHighlights: async () => {}, clearInPageHighlights: () => {}, setInPageHighlightsEnabled: () => {} },
     './util/toast': {}, './ui/ai-presets': {}, './lib/extract': {},
     './ui/summary-panel': { disposePanel: () => {} },

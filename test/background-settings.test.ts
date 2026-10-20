@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { loadSource, event } from './load-source.ts'
 
 const chrome = {
-  runtime: { onMessage: event(), onConnect: event(), onStartup: event(), onInstalled: event() },
+  runtime: { onMessage: event(), onConnect: event(), onStartup: event(), onInstalled: event(), onUpdateAvailable: event() },
   tabs: { onUpdated: event(), onRemoved: event(), onActivated: event() },
   windows: { onFocusChanged: event() },
   storage: { onChanged: event(), local: { get: async () => { throw new Error('Storage unavailable') } } },

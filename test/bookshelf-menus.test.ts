@@ -7,13 +7,14 @@ const menus = new Map<string, any>()
 const sent: any[] = []
 const toasts: any[] = []
 const chrome = {
-  runtime: { onMessage: event(), onConnect: event(), onStartup: event(), onInstalled: event(), lastError: undefined },
+  runtime: { onMessage: event(), onConnect: event(), onStartup: event(), onInstalled: event(), onUpdateAvailable: event(), lastError: undefined },
   tabs: { onUpdated: event(), onRemoved: event(), onActivated: event(),
     query: (_query: any, callback: any) => callback([{ id: 5, url: activeUrl }]),
     sendMessage: async (_id: number, message: any) => { toasts.push(message) },
   },
   windows: { onFocusChanged: event() },
-  storage: { onChanged: event(), local: { get: async (defaults: any) => ({ ...defaults, bookshelfEnabled }) } },
+  storage: { onChanged: event(), local: { get: async (defaults: any) => ({ ...defaults, bookshelfEnabled }) }, session: { set: async () => {}, remove: async () => {} } },
+  action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {} },
   commands: { onCommand: event() },
   contextMenus: {
     onClicked: event(), removeAll: async () => menus.clear(),
@@ -27,6 +28,12 @@ loadSource('src/background.ts', { chrome }, {
   './shared/injection': { sendToTab: async (id: number, message: any) => { sent.push({ id, ...message }); return { ok: true } } },
 })
 const flush = () => new Promise(resolve => setImmediate(resolve))
+// Update latency (2026-10-20): no browser-wide tab/window listeners may wake the
+// worker, and a downloaded update must install without waiting for idle.
+for (const [name, ev] of Object.entries({ 'tabs.onUpdated': chrome.tabs.onUpdated, 'tabs.onActivated': chrome.tabs.onActivated, 'tabs.onRemoved': chrome.tabs.onRemoved, 'windows.onFocusChanged': chrome.windows.onFocusChanged })) {
+  assert.equal(ev.listeners.size, 0, `${name} must not be registered`)
+}
+assert.equal(chrome.runtime.onUpdateAvailable.listeners.size, 1, 'onUpdateAvailable reloads the extension')
 chrome.runtime.onStartup.emit()
 await flush()
 assert.equal(menus.get('bookshelf_save_menu').visible, true)
@@ -45,7 +52,8 @@ await flush()
 assert.equal(sent.at(-1).type, 'highlightToBookshelf')
 assert.equal(sent.at(-1).selectionText, 'Selected words')
 activeUrl = 'https://medium.com/@writer'
-chrome.tabs.onActivated.emit()
+// The content script reports in-tab navigation and the tab becoming visible.
+chrome.runtime.onMessage.emit({ type: 'pageReport', signals: {} }, { tab: { id: 5, active: true, url: activeUrl }, url: activeUrl, frameId: 0 }, () => {})
 await flush()
 assert.equal(menus.get('bookshelf_save_menu').visible, false)
 assert.equal(menus.get('bookshelf_highlight_menu').visible, false)

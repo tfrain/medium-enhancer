@@ -1,5 +1,6 @@
 import { saveCurrentStory, highlightCurrentStory } from './lib/bookshelf'
 import { applyInPageHighlights, clearInPageHighlights, setInPageHighlightsEnabled } from './lib/inpage-highlights'
+import { reportPage } from './lib/feed-signals'
 import { showToast } from './util/toast'
 import { AI_PRESETS } from './ui/ai-presets'
 import { extractArticle, extractArticleTextForAI } from './lib/extract'
@@ -145,6 +146,10 @@ if (window === window.top && !alreadyLoaded) {
     })
   }
   loadFeatures()
+  // Feeds/menus: report once Medium has rendered, and whenever this tab comes back.
+  reportPage(1000)
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reportPage(0) })
+  window.addEventListener('focus', () => reportPage(0))
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !(changes.selfCiteEnabled || changes.quoteCardHoverEnabled || changes.bookshelfEnabled || changes.bookshelfInPageHighlights)) return
@@ -180,6 +185,7 @@ if (window === window.top && !alreadyLoaded) {
     clearInPageHighlights()
     disposePanel()
     loadFeatures()
+    reportPage(1000)
   }
   window.addEventListener('popstate', checkCurrentUrl)
   window.addEventListener('hashchange', checkCurrentUrl)

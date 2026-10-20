@@ -72,6 +72,8 @@ try {
   await worker.evaluate(url => chrome.tabs.create({ url, active: false }), popupUrl)
   const popup = await (await browser.waitForTarget(t => t.url() === popupUrl)).page()
   await popup.waitForFunction(() => [...document.querySelectorAll('button')].some(b => b.textContent === 'Save to Bookshelf'), { polling: 100 })
+  // RSS feeds now come from the content script's pageReport (no tabs.onUpdated), via storage.session.
+  await popup.waitForFunction(() => document.body.innerText.includes('medium.com/feed/@writer'), { polling: 100, timeout: 8000 })
   const click = (p, label) => p.evaluate(label => {
     const button = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === label)
     if (!button || button.disabled) throw new Error(`Missing/enabled button: ${label}`)
@@ -153,7 +155,7 @@ try {
   const markdown = zip.subarray(30 + nameSize, 30 + nameSize + dataSize).toString('utf8')
   for (const value of ['title: "A bookshelf story"', 'author: "Test Author"', 'publication: "Test Publication"', 'quokka', 'remember the wombat note', '> -']) assert.ok(markdown.includes(value), value)
   assert.deepEqual(errors, [])
-  console.log('PASS offline Bookshelf: copy page as Markdown, in-page highlights with note tooltip and toggle, popup save, read filters, delete/undo, context capture path, test-only Pro archive/highlight, note search, archive search and ZIP download')
+  console.log('PASS offline Bookshelf: RSS feed via pageReport, copy page as Markdown, in-page highlights with note tooltip and toggle, popup save, read filters, delete/undo, context capture path, test-only Pro archive/highlight, note search, archive search and ZIP download')
 } finally {
   if (browser) await browser.close()
   fs.rmSync(root, { recursive: true, force: true })

@@ -101,6 +101,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(error => sendResponse({ ok: false, error: error.message || String(error) }))
     return true
   }
+  if (message?.type === 'pageReport') {
+    const tabId = sender.tab?.id
+    const url = sender.url || sender.tab?.url || ''
+    if (tabId !== undefined && sender.frameId === 0) {
+      void reportFeeds(tabId, url, cleanSignals(message.signals)).catch(error => console.warn('[bg] feed report failed', error))
+      if (sender.tab?.active) void updateQuoteCardMenu(url)
+    }
+    return
+  }
   if (message?.type === 'downloadQuoteCard') {
     if (!sender.tab || !mediumPostId(sender.url || sender.tab.url || '')) {
       sendResponse({ ok: false, error: 'Quote cards are available on Medium stories.' })
@@ -220,11 +229,16 @@ const ensureOllamaDnrRule = async () => {
 // Match patterns cannot distinguish story slugs from profiles; update visibility
 // on tab/navigation changes and verify the story URL again when clicked.
 let quoteMenuUpdate = Promise.resolve()
-const updateQuoteCardMenu = () => quoteMenuUpdate = quoteMenuUpdate.catch(() => {}).then(async () => {
-  const tab = await getCurrentTab()
+let lastMenuState = ''
+const updateQuoteCardMenu = (pageUrl?: string) => quoteMenuUpdate = quoteMenuUpdate.catch(() => {}).then(async () => {
+  const url = pageUrl ?? (await getCurrentTab())?.url ?? ''
   const { bookshelfEnabled } = await chrome.storage.local.get({ bookshelfEnabled: true })
   const pro = await isPro()
-  const story = !!mediumPostId(tab?.url || '')
+  const story = !!mediumPostId(url)
+  // contextMenus.update for every report would be wasted work; skip unchanged states.
+  const state = JSON.stringify([story, bookshelfEnabled, pro])
+  if (state === lastMenuState) return
+  lastMenuState = state
   for (const id of ['quote_card_menu', 'bookshelf_save_menu', 'bookshelf_highlight_menu']) {
     await new Promise<void>(resolve => {
       chrome.contextMenus.update(id, { visible: story && (id === 'quote_card_menu' || bookshelfEnabled),
@@ -235,18 +249,20 @@ const updateQuoteCardMenu = () => quoteMenuUpdate = quoteMenuUpdate.catch(() => 
     })
   }
 })
-chrome.tabs.onActivated.addListener(() => { void updateQuoteCardMenu() })
-// Medium is a single-page app: moving from the home feed to a story changes the
-// URL in the same tab without activating anything, which left the story menus
-// hidden until the user switched tabs (reported 2026-10-20).
-chrome.tabs.onUpdated.addListener((_id, change, tab) => { if (tab.active && (change.url || change.status === 'complete')) void updateQuoteCardMenu() })
-chrome.windows.onFocusChanged.addListener(() => { void updateQuoteCardMenu() })
+// Menu visibility follows reports from the content script (page load, in-tab
+// navigation, tab becoming visible) instead of browser-wide tab events; see
+// reportFeeds for why waking this worker on every tab matters.
+
+// Chrome checks the store every few hours; when an update has downloaded while
+// this worker is running, install it now instead of waiting for an idle gap.
+chrome.runtime.onUpdateAvailable.addListener(() => chrome.runtime.reload())
 
 // "Summarize with AI" is shown only while AI Summary is on in Options.
 let menuUpdate = Promise.resolve()
 const ensureContextMenus = () => menuUpdate = menuUpdate.catch(() => {}).then(async () => {
   const { aiSummaryEnabled, obsidianClipperEnabled } = await chrome.storage.local.get({ aiSummaryEnabled: true, obsidianClipperEnabled: false })
   await chrome.contextMenus.removeAll()
+  lastMenuState = '' // menus are recreated hidden; force the next update through
   chrome.contextMenus.create({
     id: 'quote_card_menu', title: 'Make quote card', contexts: ['selection'],
     documentUrlPatterns: mediumStoryDocumentPatterns, visible: false,
@@ -289,6 +305,8 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   ensureContextMenus();
+  // Per-tab feeds moved to storage.session in 0.10; drop the old local copies.
+  chrome.storage.local.get(null).then(all => chrome.storage.local.remove(Object.keys(all).filter(k => k.startsWith('feeds_')))).catch(() => {})
   ensureOllamaDnrRule();
   // Set on every install/update so people who installed before this existed get it too.
   chrome.runtime.setUninstallURL?.(ARTICLE_URL);
@@ -319,10 +337,6 @@ const generateFeeds = (
   return feeds
 }
 
-// Track the last URL per tab to prevent duplicate processing
-const lastUrlByTab = new Map<number, string>()
-
-const feedVersionByTab = new Map<number, number>()
 const stripScheme = (u: string) => u.replace(/^https?:\/\//, '').replace(/\/$/, '')
 
 const isLoggedInMediumViewerLink = (url: string) => {
@@ -356,161 +370,98 @@ const bestAuthorFeed = (links: AuthorProfileLink[]): string | null => {
   return candidates[0]?.feed ?? null
 }
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (tab.active && (changeInfo.url || changeInfo.status)) void updateQuoteCardMenu()
-  if (changeInfo.url || changeInfo.status === 'loading') {
-    feedVersionByTab.set(tabId, (feedVersionByTab.get(tabId) || 0) + 1)
-    lastUrlByTab.delete(tabId)
-    chrome.action.setBadgeText({ text: '', tabId })
-    chrome.storage.local.remove(`feeds_${tabId}`)
-  }
-  if ((changeInfo.status === 'complete' || (changeInfo.url && tab.status === 'complete')) && tab.url && tab.url !== lastUrlByTab.get(tabId)) {
-    lastUrlByTab.set(tabId, tab.url)
+type FeedSignals = { alternateFeedLinks: string[]; anchorFeedLinks: string[]; authorProfileLinks: AuthorProfileLink[] }
 
-    // Reset per-tab state for the new URL. We'll repopulate below if we find
-    // legitimate feeds — so non-article pages leave no stale data behind.
-    chrome.action.setBadgeText({ text: '', tabId: tabId })
-    chrome.storage.local.remove(`feeds_${tabId}`)
-
-    if (!classifyMediumUrl(tab.url)) return
-    const url = tab.url
-    const version = feedVersionByTab.get(tabId) || 0
-    const isCurrent = async () => {
-      if ((feedVersionByTab.get(tabId) || 0) !== version) return false
-      const current = await chrome.tabs.get(tabId).catch(() => null)
-      return current?.url === url && (feedVersionByTab.get(tabId) || 0) === version
-    }
-
-    setTimeout(async () => {
-      if (!await isCurrent()) return
-      chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        func: () => {
-          const alternateFeedLinks = Array.from(
-            document.querySelectorAll('link[rel="alternate"][type="application/rss+xml"]')
-          ).map(el => (el as HTMLLinkElement).href)
-
-          const anchorFeedLinks = Array.from(
-            document.querySelectorAll('a[href*="/feed"]')
-          ).map(el => (el as HTMLAnchorElement).href)
-
-          const metaAuthor = (document.querySelector('meta[name="author"]') as HTMLMetaElement | null)?.content?.trim() || ''
-
-          // Author profile links (/@username), scored to prefer the article
-          // byline and avoid the logged-in user's top-nav profile link.
-          const authorProfileLinks = Array.from(
-            document.querySelectorAll('a[href*="/@"]')
-          ).map(el => {
-            const anchor = el as HTMLAnchorElement
-            let score = 0
-            try {
-              const u = new URL(anchor.href)
-              const source = u.searchParams.get('source') || ''
-              const text = (anchor.textContent || anchor.getAttribute('aria-label') || '').trim()
-              if (!/^\/@[^/?]+\/?$/.test(u.pathname)) return null
-              if (/post_responses|responses|comments/i.test(source)) return null
-              if (/post_page|post_header|post_author|byline/i.test(source)) score += 8
-              if (anchor.closest('article, main')) score += 3
-              if (anchor.closest('header, nav, [role="banner"], [role="navigation"]')) score -= 6
-              if (metaAuthor && text && text.toLowerCase().includes(metaAuthor.toLowerCase())) score += 5
-              if (/user_profile|nav|home_header|settings/i.test(source)) score -= 10
-              return { href: anchor.href, score }
-            } catch { return null }
-          }).filter(Boolean) as { href: string; score: number }[]
-
-          return { alternateFeedLinks, anchorFeedLinks, authorProfileLinks }
-        },
-      },
-        async (results) => {
-          if (chrome.runtime.lastError || !await isCurrent()) return
-          if (!results || !results[0] || !results[0].result) return
-          const { alternateFeedLinks, anchorFeedLinks, authorProfileLinks } = results[0].result as {
-            alternateFeedLinks: string[]
-            anchorFeedLinks: string[]
-            authorProfileLinks: AuthorProfileLink[]
-          }
-
-          const hostname = (() => { try { return new URL(tab.url!).hostname } catch { return '' } })()
-          const mediumHost = isMediumHost(hostname)
-          const knownMediumPublicationHost = isKnownMediumPublicationHost(hostname)
-
-          let feeds: Feed[] = []
-
-          if (mediumHost || knownMediumPublicationHost) {
-            // Known Medium host — safe to run the full feed-detection logic including
-            // fabrication fallbacks (author feed from /@byline, publication from URL path).
-            const links = [...new Set([...alternateFeedLinks, ...anchorFeedLinks])]
-            const alternateLinks = [...new Set(alternateFeedLinks)]
-            const standardUserFeedLink = alternateLinks.find((l) => l.includes('/feed/@'))
-            const customUserFeedLink = alternateLinks.find((l) => /\/\/[^/.]+\.medium\.com\/feed(?:\/|\?|$)/.test(l))
-            const userFeedLink = standardUserFeedLink ?? customUserFeedLink ?? null
-
-            const pubFeedLink = links.find(
-              (l) =>
-                l !== userFeedLink &&
-                ((l.includes('/feed/') && !l.includes('/feed/@')) ||
-                  /\/\/medium\.[^.]+\.[^/]+\/feed(?:\/|\?|$)/.test(l))
-            )
-
-            const userPath = userFeedLink?.match(/\/\/([^?]+)/)?.[1] ?? null
-            const pubPath = pubFeedLink?.match(/\/\/([^?]+)/)?.[1] ?? null
-
-            const authorFeed = !userPath ? bestAuthorFeed(authorProfileLinks) : null
-
-            const urlParts = mediumPathParts(tab.url!)
-            const authorFromUrl = urlParts[0]?.startsWith('@')
-              ? `medium.com/feed/${urlParts[0]}`
-              : mediumHost && hostname !== 'medium.com' && urlParts.length === 0
-                ? `${hostname}/feed`
-                : null
-
-            const userFeed = userPath
-              ? userPath.includes('/feed') ? userPath : userPath.replace(/\/?$/, '/feed')
-              : authorFeed ?? authorFromUrl
-
-            const publicationFromUrl =
-              hostname === 'medium.com' &&
-              urlParts[0] &&
-              !urlParts[0].startsWith('@') &&
-              !reservedMediumPaths.has(urlParts[0].toLowerCase())
-                ? urlParts[0] : null
-
-            const mediumPublication =
-              pubPath?.match(/medium\.com\/feed\/([^/?]+)/)?.[1] ?? publicationFromUrl ?? null
-            const publicationDomain =
-              knownMediumPublicationHost ? hostname :
-                !mediumPublication && pubPath ? pubPath : null
-
-            feeds = generateFeeds(userFeed, mediumPublication, publicationDomain)
-          } else {
-            // Non-Medium host. DO NOT fabricate feeds. Only trust explicit
-            // <link rel="alternate" type="application/rss+xml"> declarations.
-            const seen = new Set<string>()
-            for (const href of alternateFeedLinks) {
-              const clean = stripScheme(href)
-              if (!clean || seen.has(clean)) continue
-              seen.add(clean)
-              feeds.push({ name: 'RSS Feed', url: clean, type: 'publication' })
-            }
-          }
-
-          if (feeds.length > 0 && await isCurrent()) {
-            chrome.action.setBadgeText({ text: feeds.length.toString(), tabId: tabId })
-            chrome.action.setBadgeBackgroundColor({ color: '#070707', tabId: tabId })
-            chrome.storage.local.set({ [`feeds_${tabId}`]: feeds })
-          }
-        }
-      )
-    }, 1000)
-  }
-});
-
-// Clean up per-tab state when a tab closes
-chrome.tabs.onRemoved.addListener((tabId) => {
-  lastUrlByTab.delete(tabId)
-  feedVersionByTab.delete(tabId)
-  chrome.storage.local.remove(`feeds_${tabId}`)
+// Signals come from our own content script, but treat them as untrusted shapes.
+const cleanSignals = (value: any): FeedSignals => ({
+  alternateFeedLinks: Array.isArray(value?.alternateFeedLinks) ? value.alternateFeedLinks.filter((x: unknown) => typeof x === 'string').slice(0, 50) : [],
+  anchorFeedLinks: Array.isArray(value?.anchorFeedLinks) ? value.anchorFeedLinks.filter((x: unknown) => typeof x === 'string').slice(0, 200) : [],
+  authorProfileLinks: Array.isArray(value?.authorProfileLinks) ? value.authorProfileLinks
+    .filter((x: any) => x && typeof x.href === 'string' && typeof x.score === 'number').slice(0, 200) : [],
 })
+
+const computeFeeds = (pageUrl: string, { alternateFeedLinks, anchorFeedLinks, authorProfileLinks }: FeedSignals): Feed[] => {
+  const hostname = (() => { try { return new URL(pageUrl).hostname } catch { return '' } })()
+  const mediumHost = isMediumHost(hostname)
+  const knownMediumPublicationHost = isKnownMediumPublicationHost(hostname)
+
+  let feeds: Feed[] = []
+
+  if (mediumHost || knownMediumPublicationHost) {
+    // Known Medium host — safe to run the full feed-detection logic including
+    // fabrication fallbacks (author feed from /@byline, publication from URL path).
+    const links = [...new Set([...alternateFeedLinks, ...anchorFeedLinks])]
+    const alternateLinks = [...new Set(alternateFeedLinks)]
+    const standardUserFeedLink = alternateLinks.find((l) => l.includes('/feed/@'))
+    const customUserFeedLink = alternateLinks.find((l) => /\/\/[^/.]+\.medium\.com\/feed(?:\/|\?|$)/.test(l))
+    const userFeedLink = standardUserFeedLink ?? customUserFeedLink ?? null
+
+    const pubFeedLink = links.find(
+      (l) =>
+        l !== userFeedLink &&
+        ((l.includes('/feed/') && !l.includes('/feed/@')) ||
+          /\/\/medium\.[^.]+\.[^/]+\/feed(?:\/|\?|$)/.test(l))
+    )
+
+    const userPath = userFeedLink?.match(/\/\/([^?]+)/)?.[1] ?? null
+    const pubPath = pubFeedLink?.match(/\/\/([^?]+)/)?.[1] ?? null
+
+    const authorFeed = !userPath ? bestAuthorFeed(authorProfileLinks) : null
+
+    const urlParts = mediumPathParts(pageUrl)
+    const authorFromUrl = urlParts[0]?.startsWith('@')
+      ? `medium.com/feed/${urlParts[0]}`
+      : mediumHost && hostname !== 'medium.com' && urlParts.length === 0
+        ? `${hostname}/feed`
+        : null
+
+    const userFeed = userPath
+      ? userPath.includes('/feed') ? userPath : userPath.replace(/\/?$/, '/feed')
+      : authorFeed ?? authorFromUrl
+
+    const publicationFromUrl =
+      hostname === 'medium.com' &&
+      urlParts[0] &&
+      !urlParts[0].startsWith('@') &&
+      !reservedMediumPaths.has(urlParts[0].toLowerCase())
+        ? urlParts[0] : null
+
+    const mediumPublication =
+      pubPath?.match(/medium\.com\/feed\/([^/?]+)/)?.[1] ?? publicationFromUrl ?? null
+    const publicationDomain =
+      knownMediumPublicationHost ? hostname :
+        !mediumPublication && pubPath ? pubPath : null
+
+    feeds = generateFeeds(userFeed, mediumPublication, publicationDomain)
+  } else {
+    // Non-Medium host. DO NOT fabricate feeds. Only trust explicit
+    // <link rel="alternate" type="application/rss+xml"> declarations.
+    const seen = new Set<string>()
+    for (const href of alternateFeedLinks) {
+      const clean = stripScheme(href)
+      if (!clean || seen.has(clean)) continue
+      seen.add(clean)
+      feeds.push({ name: 'RSS Feed', url: clean, type: 'publication' })
+    }
+  }
+
+  return feeds
+}
+
+// Feeds used to be detected from chrome.tabs.onUpdated, which woke this worker
+// for every page load in every tab. MV3 installs a downloaded update only once
+// the worker has been idle (about 30 s), so a busy browser kept users on the old
+// version for hours (reported 2026-10-20). Now only our content script, which
+// runs on Medium pages alone, reports a page, and per-tab results live in
+// storage.session (cleared with the browser session, so no tabs.onRemoved).
+const reportFeeds = async (tabId: number, pageUrl: string, signals: FeedSignals) => {
+  const key = `feeds_${tabId}`
+  const feeds = classifyMediumUrl(pageUrl) ? computeFeeds(pageUrl, signals) : []
+  await chrome.action.setBadgeText({ text: feeds.length ? String(feeds.length) : '', tabId }).catch(() => {})
+  if (!feeds.length) { await chrome.storage.session.remove(key); return }
+  await chrome.action.setBadgeBackgroundColor({ color: '#070707', tabId }).catch(() => {})
+  await chrome.storage.session.set({ [key]: { url: pageUrl, feeds } })
+}
 
 // AI chat via Ollama (streaming over runtime Port)
 const MAX_ARTICLE_CHARS = 12000

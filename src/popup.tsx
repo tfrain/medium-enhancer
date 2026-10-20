@@ -120,10 +120,11 @@ function IndexPopup() {
       activeTabIsMedium = !!classifyMediumUrl(tab.url)
       if (activeTabIsMedium) {
         const feedsKey = `feeds_${tab.id}`
-        chrome.storage.local.get([feedsKey], (result) => {
+        // Written by the background when this tab's content script reports (storage.session).
+        chrome.storage.session.get([feedsKey], (result) => {
           const stored = result[feedsKey]
-          if (stored && stored.length > 0) {
-            setFeeds(stored)
+          if (stored?.url === tab.url && stored.feeds?.length > 0) {
+            setFeeds(stored.feeds)
             setIsMediumPage(true)
           } else {
             fallbackTimer = setTimeout(() => setIsMediumPage(true), 2500)
@@ -146,12 +147,11 @@ function IndexPopup() {
     })
 
     const storageListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-      if (area !== 'local') return
-      if (changes.obsidianClipperEnabled) setObsidianEnabled(!!changes.obsidianClipperEnabled.newValue)
-      if (activeTabId === undefined) return
+      if (area === 'local' && changes.obsidianClipperEnabled) setObsidianEnabled(!!changes.obsidianClipperEnabled.newValue)
+      if (area !== 'session' || activeTabId === undefined) return
       const feedsKey = `feeds_${activeTabId}`
       if (activeTabIsMedium && changes[feedsKey]) {
-        const newFeeds = changes[feedsKey].newValue || []
+        const newFeeds = changes[feedsKey].newValue?.feeds || []
         setFeeds(newFeeds)
         clearTimeout(fallbackTimer)
         setIsMediumPage(true)

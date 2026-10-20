@@ -7,7 +7,7 @@ let navigated: any
 const chrome: any = {
   runtime: { getURL: (p: string) => 'chrome-extension://test/' + p,
     sendMessage: async (message: any) => { sent = message; return { ok: true, filepath: 'clippers/Story.md' } },
-    onMessage: event(), onConnect: event(), onStartup: event(), onInstalled: event(),
+    onMessage: event(), onConnect: event(), onStartup: event(), onInstalled: event(), onUpdateAvailable: event(),
   },
   tabs: { getCurrent: async () => ({ id: 9 }), get: async () => ({ id: 9, url: libraryUrl }),
     update: async (id: number, options: any) => { navigated = { id, ...options } }, onUpdated: event(), onRemoved: event(), onActivated: event() },
