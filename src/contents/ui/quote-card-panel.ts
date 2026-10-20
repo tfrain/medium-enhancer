@@ -5,6 +5,7 @@ import { showToast } from '../util/toast'
 import { createQuoteHover } from './quote-hover'
 
 const PANEL_ID = '__me_quote_card_panel__'
+export const QUOTE_PANEL_LEAVE_MS = 600
 const BUTTON_ID = '__me_quote_card_button__'
 const CSS = `
 #${PANEL_ID} {
@@ -162,15 +163,24 @@ export const showQuoteCardPanel = async (card: QuoteCard) => {
   body.append(canvas, note, attribution)
   const actions = document.createElement('div')
   actions.className = 'me-qc-actions'
+  // Auto-close bookkeeping: never close mid-download/copy (see pointerleave below).
+  let busy = 0
+  let pointerInside = false
+  let afterBusy: (() => void) | null = null
   const action = (label: string, run: () => Promise<void>) => {
     const btn = document.createElement('button')
     btn.textContent = label
     btn.onclick = async () => {
       btn.disabled = true
+      busy++
       try { await run() } catch (error) {
         status.textContent = (error as Error).message || 'Action failed.'
         showToast(status.textContent)
-      } finally { btn.disabled = false }
+      } finally {
+        btn.disabled = false
+        busy--
+        if (!busy) afterBusy?.()
+      }
     }
     actions.appendChild(btn)
   }
@@ -242,7 +252,35 @@ export const showQuoteCardPanel = async (card: QuoteCard) => {
     }
   }
   document.addEventListener('keydown', onKeyDown, true)
+  // Close when the pointer leaves the panel (after a short grace period, so a
+  // cursor that grazes the edge on its way to a button doesn't lose the panel),
+  // or on a click anywhere outside it. Never while an action is running or the
+  // link field has focus. A panel the pointer never entered stays open.
+  let leaveTimer = 0
+  const cancelLeave = () => { window.clearTimeout(leaveTimer); leaveTimer = 0 }
+  const closeFromPointer = () => {
+    if (panel !== root) return
+    if (busy || (document.activeElement instanceof HTMLInputElement && root.contains(document.activeElement))) return
+    closePanel()
+    onSelectionChange()
+  }
+  const onPointerLeave = () => {
+    pointerInside = false
+    cancelLeave()
+    leaveTimer = window.setTimeout(closeFromPointer, QUOTE_PANEL_LEAVE_MS)
+  }
+  const onPointerEnter = () => { pointerInside = true; cancelLeave() }
+  afterBusy = () => { if (!pointerInside) onPointerLeave() }
+  const onPointerDownOutside = (event: PointerEvent) => {
+    if (panel === root && !root.contains(event.target as Node)) closeFromPointer()
+  }
+  root.addEventListener('pointerleave', onPointerLeave)
+  root.addEventListener('pointerenter', onPointerEnter)
+  document.addEventListener('pointerdown', onPointerDownOutside, true)
   panelCleanup = () => {
+    cancelLeave()
+    afterBusy = null
+    document.removeEventListener('pointerdown', onPointerDownOutside, true)
     window.removeEventListener('focus', refreshPro)
     chrome.storage.onChanged.removeListener(onProChanged)
     window.clearInterval(expiryCheck)

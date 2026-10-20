@@ -70,8 +70,20 @@ const html = `<!doctype html><html><head><title>A story</title><meta name="autho
     await page.waitForSelector('#__me_quote_card_panel__ canvas')
     assert.equal(await page.$eval('#__me_quote_card_panel__ canvas', e => e.getAttribute('aria-label')), 'Quote by Test Author: A useful paragraph with enough words for a quote card.')
     await page.waitForFunction(() => document.getElementById('__me_quote_card_hover__')?.hidden)
-    await page.keyboard.press('Escape')
-    await page.waitForFunction(() => !document.getElementById('__me_quote_card_panel__'))
+    // Pointer leaves the panel -> it closes after a short grace period, not instantly.
+    const box = await page.$eval('#__me_quote_card_panel__', e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height } })
+    await page.mouse.move(box.x + box.w / 2, box.y + box.h / 2, { steps: 4 })
+    await page.mouse.move(2, 2, { steps: 4 })
+    await new Promise(r => setTimeout(r, 200))
+    assert.ok(await page.$('#__me_quote_card_panel__'), 'still open during the grace period')
+    await page.waitForFunction(() => !document.getElementById('__me_quote_card_panel__'), { polling: 100, timeout: 3000 })
+    // A click anywhere outside the panel closes it at once.
+    await page.hover('#a1b2')
+    await page.waitForSelector('#__me_quote_card_hover__', { visible: true })
+    await page.click('#__me_quote_card_hover__')
+    await page.waitForSelector('#__me_quote_card_panel__ canvas')
+    await page.mouse.click(2, 2)
+    await page.waitForFunction(() => !document.getElementById('__me_quote_card_panel__'), { polling: 100, timeout: 1000 })
     for (const [startId, endId] of [['a1b2', 'excluded'], ['excluded', 'after'], ['a1b2', 'after'], ['a1b2', 'editor']]) {
       await page.evaluate((startId, endId) => {
         const range = document.createRange()
@@ -106,7 +118,7 @@ const html = `<!doctype html><html><head><title>A story</title><meta name="autho
     await options.click('button[type="submit"]')
     await options.waitForFunction(() => document.body.textContent.includes('That key did not work'))
     assert.deepEqual(errors, [])
-    console.log('PASS offline browser: selection, paragraph hover, Canvas, locked choices, attribution, paragraph fallback, truncation, SPA cleanup and Pro Options')
+    console.log('PASS offline browser: selection, paragraph hover, panel closes on pointer-leave and outside click, Canvas, locked choices, attribution, paragraph fallback, truncation, SPA cleanup and Pro Options')
   } finally {
     if (browser) await browser.close()
     fs.rmSync(profile, { recursive: true, force: true })
