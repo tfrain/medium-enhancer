@@ -169,14 +169,14 @@ chrome.contextMenus.onClicked.addListener(async (item, tab) => {
   if (item.menuItemId === 'summarize_menu') {
     await sendToTab(tab.id, { type: 'showSummaryPanel' }).catch((e) => console.warn('[bg] cannot run on this page', e))
   }
-  if (item.menuItemId === 'clip_markdown_menu' || item.menuItemId === 'clip_obsidian_menu') {
-    const target = item.menuItemId === 'clip_obsidian_menu' ? 'obsidian' : 'download'
+  if (item.menuItemId === 'clip_markdown_menu' || item.menuItemId === 'clip_obsidian_menu' || item.menuItemId === 'clip_copy_markdown_menu') {
+    const target = item.menuItemId === 'clip_obsidian_menu' ? 'obsidian' : item.menuItemId === 'clip_copy_markdown_menu' ? 'copy' : 'download'
     let text: string
     try {
       const response: any = await sendToTab(tab.id, { type: 'clipPageAsMarkdown', target })
       if (!response?.ok) throw new Error(response?.error || 'Could not read this page.')
       if (target === 'download') await triggerMarkdownDownload(response.title, response.markdown)
-      text = target === 'download' ? 'Saved to your Downloads folder' : OBSIDIAN_SENT_MESSAGE
+      text = target === 'download' ? 'Saved to your Downloads folder' : target === 'copy' ? 'Markdown copied to the clipboard' : OBSIDIAN_SENT_MESSAGE
     } catch (error) {
       text = (error as Error).message || String(error)
       console.error('[bg] export failed', error)
@@ -236,6 +236,10 @@ const updateQuoteCardMenu = () => quoteMenuUpdate = quoteMenuUpdate.catch(() => 
   }
 })
 chrome.tabs.onActivated.addListener(() => { void updateQuoteCardMenu() })
+// Medium is a single-page app: moving from the home feed to a story changes the
+// URL in the same tab without activating anything, which left the story menus
+// hidden until the user switched tabs (reported 2026-10-20).
+chrome.tabs.onUpdated.addListener((_id, change, tab) => { if (tab.active && (change.url || change.status === 'complete')) void updateQuoteCardMenu() })
 chrome.windows.onFocusChanged.addListener(() => { void updateQuoteCardMenu() })
 
 // "Summarize with AI" is shown only while AI Summary is on in Options.
@@ -267,6 +271,7 @@ const ensureContextMenus = () => menuUpdate = menuUpdate.catch(() => {}).then(as
     type: 'normal',
     contexts: ["page"],
   });
+  chrome.contextMenus.create({ id: 'clip_copy_markdown_menu', title: 'Copy Page as Markdown', contexts: ['page'] })
   if (obsidianClipperEnabled) chrome.contextMenus.create({
     id: 'clip_obsidian_menu', title: 'Send to Obsidian', contexts: ['page'],
   })

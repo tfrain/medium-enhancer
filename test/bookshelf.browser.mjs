@@ -59,6 +59,13 @@ try {
   await page.goto(story)
   await page.bringToFront()
   const storyTab = await worker.evaluate(async story => (await chrome.tabs.query({})).find(tab => tab.url === story).id, story)
+  // Copy Page as Markdown: the content script writes the clipboard itself.
+  await browser.defaultBrowserContext().overridePermissions('https://medium.com', ['clipboard-read', 'clipboard-write', 'clipboard-sanitized-write'])
+  const copied = await worker.evaluate(tabId => chrome.tabs.sendMessage(tabId, { type: 'clipPageAsMarkdown', target: 'copy' }), storyTab)
+  assert.equal(copied.ok, true, 'copy target answers ok: ' + JSON.stringify(copied))
+  assert.equal(copied.mode, 'copy')
+  const clipboard = await page.evaluate(() => navigator.clipboard.readText())
+  assert.ok(clipboard.includes('quokka') && clipboard.includes('A bookshelf story'), 'clipboard holds the article as Markdown')
   // A real popup queries the active story. Loading its HTML in an inactive tab
   // preserves that behavior and allows automation without opening browser chrome.
   const popupUrl = `chrome-extension://${extensionId}/popup.html`
@@ -146,7 +153,7 @@ try {
   const markdown = zip.subarray(30 + nameSize, 30 + nameSize + dataSize).toString('utf8')
   for (const value of ['title: "A bookshelf story"', 'author: "Test Author"', 'publication: "Test Publication"', 'quokka', 'remember the wombat note', '> -']) assert.ok(markdown.includes(value), value)
   assert.deepEqual(errors, [])
-  console.log('PASS offline Bookshelf: in-page highlights with note tooltip and toggle, popup save, read filters, delete/undo, context capture path, test-only Pro archive/highlight, note search, archive search and ZIP download')
+  console.log('PASS offline Bookshelf: copy page as Markdown, in-page highlights with note tooltip and toggle, popup save, read filters, delete/undo, context capture path, test-only Pro archive/highlight, note search, archive search and ZIP download')
 } finally {
   if (browser) await browser.close()
   fs.rmSync(root, { recursive: true, force: true })

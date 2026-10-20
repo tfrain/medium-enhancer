@@ -11,6 +11,23 @@ import { clipCurrentMediumArticleAsMarkdown } from './markdown/medium-to-markdow
 import { sendClipToObsidian } from '../shared/obsidian-clip'
 import type { PlasmoCSConfig } from "plasmo"
 
+// The context-menu click focuses the page, so the async clipboard API usually
+// works; when the page has lost focus Chrome rejects it, and the legacy
+// execCommand path still copies.
+const copyTextToClipboard = async (text: string) => {
+  try { await navigator.clipboard.writeText(text); return } catch { /* fall back below */ }
+  const area = document.createElement('textarea')
+  area.value = text
+  area.setAttribute('readonly', '')
+  area.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0'
+  document.body.appendChild(area)
+  area.select()
+  const ok = document.execCommand('copy')
+  area.remove()
+  if (!ok) throw new Error('Could not copy to the clipboard.')
+}
+
+
 // Runs on its own on Medium for Cite My Story in the editor and quote cards in stories.
 // Everywhere else (summary, Markdown export) it is injected when the user
 // clicks the menu, shortcut or popup button (see shared/injection.ts).
@@ -79,7 +96,12 @@ if (window === window.top && !alreadyLoaded) {
         (async () => {
           try {
             const clip = clipCurrentMediumArticleAsMarkdown()
-            if (request.target !== 'download' && request.target !== 'obsidian') throw new Error('Unknown export target.')
+            if (request.target !== 'download' && request.target !== 'obsidian' && request.target !== 'copy') throw new Error('Unknown export target.')
+            if (request.target === 'copy') {
+              await copyTextToClipboard(clip.markdown)
+              sendResponse({ ok: true, mode: 'copy', title: clip.title })
+              return
+            }
             if (request.target === 'obsidian') {
               const result = await sendClipToObsidian(clip)
               if (result.ok === false) throw new Error(result.error)

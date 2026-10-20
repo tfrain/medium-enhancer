@@ -69,11 +69,11 @@ function IndexPopup() {
   const [isMediumPage, setIsMediumPage] = useState<boolean | null>(null)
   const [clipStatus, setClipStatus] = useState<ClipStatus>("idle")
   const [obsidianEnabled, setObsidianEnabled] = useState(false)
-  const [clipTarget, setClipTarget] = useState<'download' | 'obsidian'>('download')
+  const [clipTarget, setClipTarget] = useState<'download' | 'obsidian' | 'copy'>('download')
   const [clipError, setClipError] = useState<string>("")
 
   // Explicit-click only — this never runs on its own. Works on any site.
-  const handleClipToMarkdown = (target: 'download' | 'obsidian') => {
+  const handleClipToMarkdown = (target: 'download' | 'obsidian' | 'copy') => {
     setClipTarget(target)
     setClipStatus("working")
     setClipError("")
@@ -85,9 +85,11 @@ function IndexPopup() {
       }
       try {
         // Opening the popup granted activeTab, so this works on any normal page.
-        const response: any = await sendToTab(tab.id, { type: "clipPageAsMarkdown", target })
+        // Copy reads the Markdown like a download and writes it here: the popup has focus.
+        const response: any = await sendToTab(tab.id, { type: "clipPageAsMarkdown", target: target === 'copy' ? 'download' : target })
         if (!response?.ok) throw new Error(response?.error || "Could not read this page.")
-        if (response.mode === "download") {
+        if (target === 'copy') await navigator.clipboard.writeText(response.markdown)
+        else if (response.mode === "download") {
           await triggerMarkdownDownload(response.title, response.markdown)
         }
         if (target === 'obsidian') {
@@ -187,12 +189,16 @@ function IndexPopup() {
           onClick={() => handleClipToMarkdown('download')} disabled={clipStatus === 'working'}>
           {clipStatus === 'working' && clipTarget === 'download' ? 'Downloading...' : 'Download .md'}
         </button>
+        <button type="button" className="clip-markdown-btn"
+          onClick={() => handleClipToMarkdown('copy')} disabled={clipStatus === 'working'}>
+          {clipStatus === 'working' && clipTarget === 'copy' ? 'Copying...' : 'Copy .md'}
+        </button>
         {obsidianEnabled && <button type="button" className="clip-markdown-btn"
           onClick={() => handleClipToMarkdown('obsidian')} disabled={clipStatus === 'working'}>
           {clipStatus === 'working' && clipTarget === 'obsidian' ? 'Opening...' : 'Send to Obsidian'}
         </button>}
       </div>
-      {clipStatus === 'done' && <p className="popup-message">{clipTarget === 'obsidian' ? 'Opened Obsidian' : 'Saved to your Downloads folder'}</p>}
+      {clipStatus === 'done' && <p className="popup-message">{clipTarget === 'obsidian' ? 'Opened Obsidian' : clipTarget === 'copy' ? 'Markdown copied to the clipboard' : 'Saved to your Downloads folder'}</p>}
       {clipStatus === "error" && <p className="popup-message clip-error">{clipError}</p>}
 
       {renderBody()}
