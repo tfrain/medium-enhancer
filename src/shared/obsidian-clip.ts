@@ -1,3 +1,5 @@
+import { createObsidianAdvancedUri } from './obsidian-uri'
+
 // Obsidian is an optional, explicit export target alongside Markdown download.
 export const OBSIDIAN_SENT_MESSAGE = 'Sent to Obsidian. If no note appears, check that Obsidian and its Advanced URI plugin are installed, or use Convert Page to Markdown to download the file.'
 
@@ -60,8 +62,24 @@ export const sendClipToObsidian = async (
   const settings = await getStorage(OBSIDIAN_SETTINGS_DEFAULTS)
   const filepath = renderObsidianPathTemplate(settings.obsidianPathTemplate, clip)
 
+  // Extension tabs can use their own clipboard; scripting cannot inject into
+  // chrome-extension:// pages. Ordinary content-script exports keep the old path.
+  const libraryPage = typeof window !== 'undefined' && window.location.href.split(/[?#]/)[0] === chrome.runtime.getURL('tabs/bookshelf.html')
+  let libraryTabId: number | undefined
+  let clipboardReady = false
+  if (libraryPage) {
+    libraryTabId = (await chrome.tabs.getCurrent())?.id
+    if (libraryTabId === undefined) return { ok: false, error: 'Cannot resolve Bookshelf tab.' }
+    const uri = createObsidianAdvancedUri({ vault: settings.obsidianVault, folder: settings.obsidianFolder,
+      title: clip.title, filepath, markdown: clip.markdown })
+    if (uri.transport === 'clipboard') {
+      await navigator.clipboard.writeText(clip.markdown)
+      clipboardReady = true
+    }
+  }
   const response = await chrome.runtime.sendMessage({
     type: 'send-to-obsidian',
+    ...(libraryPage ? { libraryTabId, clipboardReady } : {}),
     markdown: clip.markdown,
     title: clip.title,
     vault: settings.obsidianVault,

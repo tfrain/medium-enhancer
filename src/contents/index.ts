@@ -1,3 +1,4 @@
+import { saveCurrentStory, highlightCurrentStory } from './lib/bookshelf'
 import { showToast } from './util/toast'
 import { AI_PRESETS } from './ui/ai-presets'
 import { extractArticle, extractArticleTextForAI } from './lib/extract'
@@ -47,6 +48,15 @@ if (window === window.top && !alreadyLoaded) {
         } catch (e) {
           sendResponse({ ok: false, error: (e as Error).message })
         }
+      }
+
+      if (request?.type === 'saveToBookshelf' || request?.type === 'highlightToBookshelf') {
+        (request.type === 'saveToBookshelf'
+          ? saveCurrentStory(request.archiveOnly === true, typeof request.expectedKey === 'string' ? request.expectedKey : undefined)
+          : highlightCurrentStory(String(request.selectionText || '')))
+          .then(result => sendResponse({ ...result, ok: true }))
+          .catch(error => sendResponse({ ok: false, error: error.message || String(error) }))
+        return true
       }
 
       if (request?.type === 'showQuoteCard') {

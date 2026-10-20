@@ -1,3 +1,5 @@
+import { handleBookshelfMessage } from './shared/bookshelf-service'
+import { isPro } from './shared/pro'
 import { ARTICLE_URL, shouldOpenArticleOnUpdate } from "./shared/whats-new"
 import { getAiConfig, readAiSettings } from "./shared/ai-defaults"
 import { readStreamLines } from "./shared/stream-lines"
@@ -25,6 +27,8 @@ type SendToObsidianMessage = {
   vault?: string
   folder?: string
   filepath?: string
+  libraryTabId?: number
+  clipboardReady?: boolean
 }
 
 const copyMarkdownInTab = async (tabId: number, markdown: string): Promise<boolean> => {
@@ -55,8 +59,14 @@ const handleSendToObsidian = async (
   message: SendToObsidianMessage,
   sender: chrome.runtime.MessageSender,
 ) => {
-  const tabId = sender.tab?.id
-  if (!tabId) {
+  const libraryPage = sender.url?.split(/[?#]/)[0] === chrome.runtime.getURL('tabs/bookshelf.html')
+  let tabId = sender.tab?.id
+  if (libraryPage) {
+    const libraryTab = Number.isSafeInteger(message.libraryTabId) ? await chrome.tabs.get(message.libraryTabId!) : undefined
+    if (libraryTab?.url?.split(/[?#]/)[0] !== chrome.runtime.getURL('tabs/bookshelf.html')) throw new Error('Cannot resolve Bookshelf tab.')
+    tabId = libraryTab.id
+  }
+  if (tabId === undefined) {
     throw new Error("Cannot resolve current tab for Obsidian export.")
   }
 
@@ -69,7 +79,7 @@ const handleSendToObsidian = async (
   })
 
   if (uriInfo.transport === "clipboard") {
-    const copied = await copyMarkdownInTab(tabId, message.markdown || "")
+    const copied = libraryPage ? message.clipboardReady === true : await copyMarkdownInTab(tabId, message.markdown || "")
     if (!copied) {
       throw new Error("Failed to copy markdown for Obsidian clipboard transport.")
     }
@@ -86,6 +96,11 @@ const handleSendToObsidian = async (
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'bookshelf') {
+    handleBookshelfMessage(message, sender).then(sendResponse)
+      .catch(error => sendResponse({ ok: false, error: error.message || String(error) }))
+    return true
+  }
   if (message?.type === 'downloadQuoteCard') {
     if (!sender.tab || !mediumPostId(sender.url || sender.tab.url || '')) {
       sendResponse({ ok: false, error: 'Quote cards are available on Medium stories.' })
@@ -133,6 +148,20 @@ chrome.commands.onCommand.addListener(async (command) => {
 
 chrome.contextMenus.onClicked.addListener(async (item, tab) => {
   if (!tab || tab.id == null) return
+  if (item.menuItemId === 'bookshelf_save_menu' || item.menuItemId === 'bookshelf_highlight_menu') {
+    let text: string
+    try {
+      const response = await sendToTab(tab.id, {
+        type: item.menuItemId === 'bookshelf_save_menu' ? 'saveToBookshelf' : 'highlightToBookshelf',
+        selectionText: item.selectionText || '',
+      })
+      if (!response?.ok) throw new Error(response?.error || 'Could not save to Bookshelf.')
+      text = item.menuItemId === 'bookshelf_highlight_menu' ? 'Highlight saved to Bookshelf' :
+        response.warning ? `Saved to Bookshelf. Archive unavailable: ${response.warning}` : 'Saved to Bookshelf'
+    } catch (error) { text = (error as Error).message }
+    await chrome.tabs.sendMessage(tab.id, { type: 'showExportToast', text }).catch(() => {})
+    return
+  }
   if (item.menuItemId === 'quote_card_menu' && mediumPostId(item.pageUrl || tab.url || '')) {
     await sendToTab(tab.id, { type: 'showQuoteCard', selectionText: item.selectionText || '' })
       .catch(e => console.warn('[bg] cannot make quote card', e))
@@ -193,12 +222,18 @@ const ensureOllamaDnrRule = async () => {
 let quoteMenuUpdate = Promise.resolve()
 const updateQuoteCardMenu = () => quoteMenuUpdate = quoteMenuUpdate.catch(() => {}).then(async () => {
   const tab = await getCurrentTab()
-  await new Promise<void>(resolve => {
-    chrome.contextMenus.update('quote_card_menu', { visible: !!mediumPostId(tab?.url || '') }, () => {
-      void chrome.runtime.lastError
-      resolve()
+  const { bookshelfEnabled } = await chrome.storage.local.get({ bookshelfEnabled: true })
+  const pro = await isPro()
+  const story = !!mediumPostId(tab?.url || '')
+  for (const id of ['quote_card_menu', 'bookshelf_save_menu', 'bookshelf_highlight_menu']) {
+    await new Promise<void>(resolve => {
+      chrome.contextMenus.update(id, { visible: story && (id === 'quote_card_menu' || bookshelfEnabled),
+        ...(id === 'bookshelf_highlight_menu' ? { enabled: pro, title: pro ? 'Highlight to Bookshelf' : 'Highlight to Bookshelf (Pro)' } : {}) }, () => {
+        void chrome.runtime.lastError
+        resolve()
+      })
     })
-  })
+  }
 })
 chrome.tabs.onActivated.addListener(() => { void updateQuoteCardMenu() })
 chrome.windows.onFocusChanged.addListener(() => { void updateQuoteCardMenu() })
@@ -212,6 +247,10 @@ const ensureContextMenus = () => menuUpdate = menuUpdate.catch(() => {}).then(as
     id: 'quote_card_menu', title: 'Make quote card', contexts: ['selection'],
     documentUrlPatterns: mediumStoryDocumentPatterns, visible: false,
   })
+  chrome.contextMenus.create({ id: 'bookshelf_save_menu', title: 'Save to Bookshelf', contexts: ['page'],
+    documentUrlPatterns: mediumStoryDocumentPatterns, visible: false })
+  chrome.contextMenus.create({ id: 'bookshelf_highlight_menu', title: 'Highlight to Bookshelf (Pro)', contexts: ['selection'],
+    documentUrlPatterns: mediumStoryDocumentPatterns, visible: false, enabled: false })
   await updateQuoteCardMenu()
   if (aiSummaryEnabled) {
     chrome.contextMenus.create({
@@ -234,7 +273,8 @@ const ensureContextMenus = () => menuUpdate = menuUpdate.catch(() => {}).then(as
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && (changes.aiSummaryEnabled || changes.obsidianClipperEnabled)) ensureContextMenus()
+  if (area === 'local' && (changes.aiSummaryEnabled || changes.obsidianClipperEnabled || changes.bookshelfEnabled)) ensureContextMenus()
+  if ((area === 'local' || area === 'sync') && (changes.enhancerProKey || changes.enhancerProUnlocked)) void updateQuoteCardMenu()
 })
 
 chrome.runtime.onStartup.addListener(() => {

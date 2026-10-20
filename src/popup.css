@@ -172,3 +172,7 @@ body {
 
 .clip-actions { display: flex; gap: 8px; }
 .clip-actions .clip-markdown-btn { flex: 1; width: auto; }
+
+.bookshelf-popup { padding: 12px 16px; border-bottom: 1px solid #ddd; }
+.bookshelf-popup .clip-actions { padding: 12px 0 0; flex-wrap: wrap; }
+.bookshelf-popup a { color: #1a7318; }

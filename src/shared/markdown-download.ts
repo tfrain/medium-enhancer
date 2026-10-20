@@ -16,7 +16,7 @@ export const triggerPngDownload = async (title: string, dataUrl: string): Promis
   return triggerDownload(`${sanitizeFilenameForDownload(title)}.png`, dataUrl)
 }
 
-const triggerDownload = (filename: string, dataUrl: string): Promise<number> => {
+export const triggerDownload = (filename: string, dataUrl: string): Promise<number> => {
   return new Promise((resolve, reject) => {
     let id: number | undefined
     const finish = (error?: string) => {

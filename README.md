@@ -9,9 +9,21 @@ Medium Enhancer is a browser extension that turns any long-form article page int
 - **RSS Feed Discovery**: Click the extension icon on a Medium article to find the author's and publication's RSS feeds.
 - **Quote cards / Pro**: Turn a story selection into a PNG with author and story attribution. Cards are generated locally in the browser with no network request. Pro adds styles, sizes, and watermark removal.
   Hover a paragraph to see the card icon; selection still works for part of a paragraph. The hover icon can be turned off in Options.
+- **Bookshelf**: An unlimited local read-later queue, with Pro Markdown archives, private highlights/notes, full-text search and ZIP/Obsidian export.
 - **Cite My Story** (for Medium writers): While editing a draft, list your own past stories ranked by relevance to the draft title, and copy a link that Medium turns into an embed card.
 
+## Bookshelf
+
+Your library lives in your browser and your files; there is no server to shut down.
+
+- **Free:** unlimited save-for-later queue on supported Medium stories. Use **Save to Bookshelf** in the popup or right-click menu. Open Bookshelf from the popup or Options; filter Unread/Read/All, mark stories read or unread, open stories, and delete with a brief Undo window. Free saves store metadata only.
+- **Pro:** saving also archives the rendered article as Markdown. **Archive now** in the popup can archive an existing save; from Bookshelf it requires that story to be open in another tab. No story is fetched in the background. Right-click a selection on a saved story → **Highlight to Bookshelf**, then edit private notes in Bookshelf. Search title, author, archived text, highlights and notes locally. **Export all (.zip)** creates portable Markdown files with metadata and highlights; per-story **Export to Obsidian** uses the existing clipper when enabled in Options.
+- Turn **Bookshelf** off in Options to stop capture. Existing library data remains available to manage. If Pro expires, the queue remains usable and Pro content stays stored for a future unlock.
+
+Bookshelf data stays in this browser profile's extension-owned IndexedDB. It does not sync or contact a server. `unlimitedStorage` removes Chrome's usual storage quota/eviction limits for local archives; available disk space still matters. **Export is your backup. Uninstalling the extension deletes your Bookshelf.** Keep exported files somewhere safe. ZIP backup/export is a Pro feature; this version does not import ZIP backups.
+
 ## Permissions
+- `unlimitedStorage` keeps Bookshelf archives in extension-owned IndexedDB without the usual quota and automatic storage eviction. No new host access is required.
 - Runs automatically on supported Medium hosts for quote cards in stories and Cite My Story in the editor. On other hosts, summary, Markdown export, and RSS discovery run only when you click the menu, press the shortcut, or use the popup.
 - A remote Ollama server (not on your computer) is asked for when you save its address.
 - Network requests go only to the page you are on, your Ollama server, or the AI provider you chose.
@@ -38,6 +50,9 @@ Feedback and questions go to the comments of the [release article](https://mediu
 - **RSS**: click the extension icon on a Medium article.
 
 ## Development
+
+Run unit tests with Node 26: `node --experimental-strip-types --no-warnings test/<name>.test.ts` (run each `test/*.test.ts`). The offline Bookshelf browser harness is `test/bookshelf.browser.mjs`; it needs the same locally available `puppeteer-core` and Chromium as `test/quote-card.browser.mjs`, plus a production build. It copies the build to a temporary directory and injects only a generated test-key hash there; source Pro keys are never changed. Browser tests are a separate, manual step.
+
 ```
 pnpm install
 pnpm dev

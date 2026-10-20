@@ -15,6 +15,11 @@ type Capability = {
 
 const CAPABILITIES: Capability[] = [
 	{
+		key: "bookshelfEnabled",
+		label: "Bookshelf",
+		description: "Save Medium stories for later. Pro adds local archives, private highlights, search and export.",
+	},
+	{
 		key: "quoteCardHoverEnabled",
 		label: "Show card icon when hovering a paragraph",
 		description: "On Medium stories, make a quote card from a whole paragraph. Select text to quote only part of it.",
@@ -411,6 +416,7 @@ const Options = () => {
 
 			<section className="card">
 				<h2>Features</h2>
+				<a href={chrome.runtime.getURL("tabs/bookshelf.html")} target="_blank" rel="noopener">Open Bookshelf</a>
 				{CAPABILITIES.map((c) => (
 					<label className="row" key={c.key}>
 						<div className="row-text">
@@ -426,8 +432,8 @@ const Options = () => {
 			</section>
 
 			<section className="card">
-				<h2>Pro</h2>
-				<p className="hint">Quote cards without the watermark, all card styles and sizes; more Pro features are coming.</p>
+				<h2 id="pro">Pro</h2>
+				<p className="hint">Quote cards without the watermark, all card styles and sizes, plus Bookshelf archives, private highlights and notes, full-text search and export.</p>
 				<p role="status">{pro.state === 'active' ? `Pro active, valid until ${pro.validUntil}` :
 					pro.state === 'expired' ? `Expired — valid until ${pro.validUntil}` : 'Not unlocked'}</p>
 				{pro.key && <p className="hint">Your key: <code>{pro.key}</code>. Keep it for reinstalls or another computer.</p>}

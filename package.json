@@ -1,7 +1,7 @@
 {
   "name": "medium-enhancer",
   "displayName": "Medium Enhancer",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "AI summaries, Markdown and Obsidian export, RSS feeds, and local quote cards with optional Pro styles for Medium.",
   "author": "Wesley Wei",
   "scripts": {
@@ -53,7 +53,8 @@
       "declarativeNetRequest",
       "activeTab",
       "clipboardWrite",
-      "downloads"
+      "downloads",
+      "unlimitedStorage"
     ],
     "author": "cwei3790@gmail.com",
     "optional_host_permissions": [

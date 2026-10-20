@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict'
+import { event, loadSource } from './load-source.ts'
+let pro = false
+let bookshelfEnabled = true
+let activeUrl = 'https://medium.com/@writer/story-abcdef123456'
+const menus = new Map<string, any>()
+const sent: any[] = []
+const toasts: any[] = []
+const chrome = {
+  runtime: { onMessage: event(), onConnect: event(), onStartup: event(), onInstalled: event(), lastError: undefined },
+  tabs: { onUpdated: event(), onRemoved: event(), onActivated: event(),
+    query: (_query: any, callback: any) => callback([{ id: 5, url: activeUrl }]),
+    sendMessage: async (_id: number, message: any) => { toasts.push(message) },
+  },
+  windows: { onFocusChanged: event() },
+  storage: { onChanged: event(), local: { get: async (defaults: any) => ({ ...defaults, bookshelfEnabled }) } },
+  commands: { onCommand: event() },
+  contextMenus: {
+    onClicked: event(), removeAll: async () => menus.clear(),
+    create: (menu: any) => { menus.set(menu.id, { ...menu }) },
+    update: (id: string, changes: any, callback: any) => { if (menus.has(id)) Object.assign(menus.get(id), changes); callback() },
+  },
+  declarativeNetRequest: { updateDynamicRules: async () => {}, RuleActionType: {}, HeaderOperation: {}, ResourceType: {} },
+}
+loadSource('src/background.ts', { chrome }, {
+  './shared/pro': { isPro: async () => pro },
+  './shared/injection': { sendToTab: async (id: number, message: any) => { sent.push({ id, ...message }); return { ok: true } } },
+})
+const flush = () => new Promise(resolve => setImmediate(resolve))
+chrome.runtime.onStartup.emit()
+await flush()
+assert.equal(menus.get('bookshelf_save_menu').visible, true)
+assert.equal(menus.get('bookshelf_highlight_menu').enabled, false)
+assert.match(menus.get('bookshelf_highlight_menu').title, /Pro/)
+chrome.contextMenus.onClicked.emit({ menuItemId: 'bookshelf_save_menu', pageUrl: activeUrl }, { id: 5, url: activeUrl })
+await flush()
+assert.equal(sent.at(-1).type, 'saveToBookshelf')
+assert.equal(toasts.at(-1).type, 'showExportToast')
+pro = true
+chrome.storage.onChanged.emit({ enhancerProUnlocked: { newValue: true } }, 'local')
+await flush()
+assert.equal(menus.get('bookshelf_highlight_menu').enabled, true)
+chrome.contextMenus.onClicked.emit({ menuItemId: 'bookshelf_highlight_menu', pageUrl: activeUrl, selectionText: 'Selected words' }, { id: 5, url: activeUrl })
+await flush()
+assert.equal(sent.at(-1).type, 'highlightToBookshelf')
+assert.equal(sent.at(-1).selectionText, 'Selected words')
+activeUrl = 'https://medium.com/@writer'
+chrome.tabs.onActivated.emit()
+await flush()
+assert.equal(menus.get('bookshelf_save_menu').visible, false)
+assert.equal(menus.get('bookshelf_highlight_menu').visible, false)
+bookshelfEnabled = false
+activeUrl = 'https://medium.com/p/abcdef123456'
+chrome.storage.onChanged.emit({ bookshelfEnabled: { newValue: false } }, 'local')
+await flush()
+assert.equal(menus.get('bookshelf_save_menu').visible, false)
+assert.equal(menus.get('quote_card_menu').visible, true, 'independent quote-card menu remains available')
+console.log('PASS Bookshelf context-menu registration, story visibility, live toggle/Pro gates and save/highlight dispatch')

@@ -24,6 +24,7 @@ try {
       storage: { onChanged: changed, local: { get: (defaults: any, callback: (items: any) => void) => reads.push({ defaults, callback }) } },
     },
   }, {
+    './lib/bookshelf': {},
     './util/toast': {}, './ui/ai-presets': {}, './lib/extract': {},
     './ui/summary-panel': { disposePanel: () => {} },
     './ui/quote-card-panel': {

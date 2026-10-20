@@ -1,3 +1,4 @@
+import { BookshelfPopup } from './components/bookshelf-popup'
 import { OBSIDIAN_SENT_MESSAGE } from "./shared/obsidian-clip"
 import { ARTICLE_URL } from "./shared/whats-new"
 import { inspectMediumPage } from "./shared/medium-page"
@@ -179,6 +180,7 @@ function IndexPopup() {
   return (
     <div className="popup-root">
       <div className="popup-header">RSS Feeds</div>
+      <BookshelfPopup />
 
       <div className="clip-actions">
         <button type="button" className="clip-markdown-btn"
