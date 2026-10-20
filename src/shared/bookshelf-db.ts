@@ -65,6 +65,9 @@ export const listBookshelf = (): Promise<{ items: BookshelfItem[]; highlights: B
   })
 
 // Read/merge/write in one transaction prevents concurrent re-saves losing data.
+export const getBookshelfHighlights = (itemKey: string): Promise<BookshelfHighlight[]> =>
+  transaction(['highlights'], 'readonly', tx => resultOf<BookshelfHighlight[]>(tx.objectStore('highlights').index('itemKey').getAll(itemKey)))
+
 export const saveBookshelfItem = (key: string, update: (existing?: BookshelfItem) => BookshelfItem): Promise<BookshelfItem> =>
   transaction(['items'], 'readwrite', async tx => {
     const store = tx.objectStore('items')

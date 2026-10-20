@@ -20,6 +20,11 @@ const CAPABILITIES: Capability[] = [
 		description: "Save Medium stories for later. Pro adds local archives, private highlights, search and export.",
 	},
 	{
+		key: "bookshelfInPageHighlights",
+		label: "Show my highlights on the story page",
+		description: "Pro: when you reopen a saved story, the passages you highlighted to Bookshelf are marked in the text. Hover a mark to see your note.",
+	},
+	{
 		key: "quoteCardHoverEnabled",
 		label: "Show card icon when hovering a paragraph",
 		description: "On Medium stories, make a quote card from a whole paragraph. Select text to quote only part of it.",

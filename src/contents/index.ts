@@ -1,4 +1,5 @@
 import { saveCurrentStory, highlightCurrentStory } from './lib/bookshelf'
+import { applyInPageHighlights, clearInPageHighlights, setInPageHighlightsEnabled } from './lib/inpage-highlights'
 import { showToast } from './util/toast'
 import { AI_PRESETS } from './ui/ai-presets'
 import { extractArticle, extractArticleTextForAI } from './lib/extract'
@@ -54,7 +55,10 @@ if (window === window.top && !alreadyLoaded) {
         (request.type === 'saveToBookshelf'
           ? saveCurrentStory(request.archiveOnly === true, typeof request.expectedKey === 'string' ? request.expectedKey : undefined)
           : highlightCurrentStory(String(request.selectionText || '')))
-          .then(result => sendResponse({ ...result, ok: true }))
+          .then(result => {
+            if (request.type === 'highlightToBookshelf') void applyInPageHighlights()
+            sendResponse({ ...result, ok: true })
+          })
           .catch(error => sendResponse({ ok: false, error: error.message || String(error) }))
         return true
       }
@@ -94,6 +98,7 @@ if (window === window.top && !alreadyLoaded) {
 
   const applyFeaturesForCurrentSite = (items) => {
     setQuoteCardHoverEnabled(items.quoteCardHoverEnabled)
+    setInPageHighlightsEnabled(items.bookshelfEnabled && items.bookshelfInPageHighlights)
     if (items.selfCiteEnabled) {
       mountSelfCiteBall() // no-ops itself when not on a Medium editor page
     } else {
@@ -104,6 +109,8 @@ if (window === window.top && !alreadyLoaded) {
   const SETTINGS_DEFAULTS = {
     selfCiteEnabled: true,
     quoteCardHoverEnabled: true,
+    bookshelfEnabled: true,
+    bookshelfInPageHighlights: true,
   }
 
   mountQuoteCardButton()
@@ -118,7 +125,7 @@ if (window === window.top && !alreadyLoaded) {
   loadFeatures()
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !(changes.selfCiteEnabled || changes.quoteCardHoverEnabled)) return
+    if (area !== 'local' || !(changes.selfCiteEnabled || changes.quoteCardHoverEnabled || changes.bookshelfEnabled || changes.bookshelfInPageHighlights)) return
     // Invalidate pending settings reads and close immediately on disable.
     settingsVersion++
     if (changes.selfCiteEnabled) {
@@ -139,6 +146,7 @@ if (window === window.top && !alreadyLoaded) {
       if (root !== lastQuoteRoot) {
         lastQuoteRoot = root
         resetQuoteCard()
+        clearInPageHighlights()
         loadFeatures()
       }
       return
@@ -147,6 +155,7 @@ if (window === window.top && !alreadyLoaded) {
     lastQuoteRoot = root
     unmountSelfCiteBall()
     resetQuoteCard()
+    clearInPageHighlights()
     disposePanel()
     loadFeatures()
   }

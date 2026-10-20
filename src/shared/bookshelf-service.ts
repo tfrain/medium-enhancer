@@ -1,11 +1,12 @@
 import { isPro } from './pro'
 import { mediumPostId } from './medium-url'
 import { normalizeItem, archiveItem, normalizeHighlight, requireBookshelfPro, type BookshelfMetadata } from './bookshelf-model'
-import { listBookshelf, getBookshelfItem, saveBookshelfItem, addBookshelfHighlight, updateBookshelfNote, deleteBookshelfItem, restoreBookshelfItem, type BookshelfDeleted } from './bookshelf-db'
+import { listBookshelf, getBookshelfItem, getBookshelfHighlights, saveBookshelfItem, addBookshelfHighlight, updateBookshelfNote, deleteBookshelfItem, restoreBookshelfItem, type BookshelfDeleted } from './bookshelf-db'
 import { exportMarkdown } from './bookshelf-export'
 
 export type BookshelfMessage = { type: 'bookshelf' } & (
   | { action: 'status'; key?: string }
+  | { action: 'pageHighlights' }
   | { action: 'save'; metadata: BookshelfMetadata; markdown?: string; archiveOnly?: boolean }
   | { action: 'highlight'; url: string; text: string; paragraphId?: string }
   | { action: 'read'; key: string; read: boolean }
@@ -33,6 +34,14 @@ export const handleBookshelfMessage = async (message: BookshelfMessage, sender: 
     const key = trustedExtension(sender) ? message.key : storyKey(sender, sender.url || '')
     const item = key ? await getBookshelfItem(key) : undefined
     return { ok: true, enabled, pro, saved: !!item, archived: !!item?.markdown }
+  }
+  if (message.action === 'pageHighlights') {
+    // Read-only and scoped to the story the sender is showing. Free users and a
+    // disabled Bookshelf get an empty list, not an error: the page just stays plain.
+    const key = storyKey(sender, sender.url || '')
+    if (!enabled || !pro) return { ok: true, highlights: [] }
+    const list = await getBookshelfHighlights(key)
+    return { ok: true, highlights: list.map(({ id, text, paragraphId, note }) => ({ id, text, paragraphId, note: note || '' })) }
   }
   if (message.action === 'save' || message.action === 'highlight') {
     if (!enabled) throw new Error('Bookshelf is disabled in Options.')

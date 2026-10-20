@@ -25,6 +25,7 @@ try {
     },
   }, {
     './lib/bookshelf': {},
+    './lib/inpage-highlights': { applyInPageHighlights: async () => {}, clearInPageHighlights: () => {}, setInPageHighlightsEnabled: () => {} },
     './util/toast': {}, './ui/ai-presets': {}, './lib/extract': {},
     './ui/summary-panel': { disposePanel: () => {} },
     './ui/quote-card-panel': {
