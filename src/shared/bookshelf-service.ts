@@ -1,12 +1,13 @@
 import { isPro } from './pro'
 import { mediumPostId } from './medium-url'
 import { normalizeItem, archiveItem, normalizeHighlight, requireBookshelfPro, type BookshelfMetadata } from './bookshelf-model'
-import { listBookshelf, getBookshelfItem, getBookshelfHighlights, saveBookshelfItem, addBookshelfHighlight, updateBookshelfNote, deleteBookshelfItem, restoreBookshelfItem, type BookshelfDeleted } from './bookshelf-db'
+import { listBookshelf, getBookshelfItem, getBookshelfHighlights, deleteBookshelfHighlight, saveBookshelfItem, addBookshelfHighlight, updateBookshelfNote, deleteBookshelfItem, restoreBookshelfItem, type BookshelfDeleted } from './bookshelf-db'
 import { exportMarkdown } from './bookshelf-export'
 
 export type BookshelfMessage = { type: 'bookshelf' } & (
   | { action: 'status'; key?: string }
   | { action: 'pageHighlights' }
+  | { action: 'unhighlight'; url: string; ids: number[] }
   | { action: 'save'; metadata: BookshelfMetadata; markdown?: string; archiveOnly?: boolean }
   | { action: 'highlight'; url: string; text: string; paragraphId?: string; occurrence?: number }
   | { action: 'read'; key: string; read: boolean }
@@ -42,6 +43,14 @@ export const handleBookshelfMessage = async (message: BookshelfMessage, sender: 
     if (!enabled || !pro) return { ok: true, highlights: [] }
     const list = await getBookshelfHighlights(key)
     return { ok: true, highlights: list.map(({ id, text, paragraphId, occurrence }) => ({ id, text, paragraphId, occurrence: occurrence || 0 })) }
+  }
+  if (message.action === 'unhighlight') {
+    // Removing your own highlight is not gated by Pro; it is scoped to the story you are on.
+    const key = storyKey(sender, message.url)
+    const ids = Array.isArray(message.ids) ? [...new Set(message.ids.filter(id => Number.isSafeInteger(id)))].slice(0, 50) : []
+    if (!ids.length) throw new Error('No highlight selected.')
+    for (const id of ids) await deleteBookshelfHighlight(id, key)
+    return { ok: true, removed: ids.length }
   }
   if (message.action === 'save' || message.action === 'highlight') {
     if (!enabled) throw new Error('Bookshelf is disabled in Options.')

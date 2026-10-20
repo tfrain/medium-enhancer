@@ -5,7 +5,8 @@ import { showToast } from './util/toast'
 import { AI_PRESETS } from './ui/ai-presets'
 import { extractArticle, extractArticleTextForAI } from './lib/extract'
 import { disposePanel, showAiPanel } from './ui/summary-panel'
-import { mountQuoteCardButton, openQuoteCardFromSelection, resetQuoteCard, setQuoteCardHoverEnabled } from './ui/quote-card-panel'
+import { mountQuoteCardButton, openQuoteCardFromSelection, resetQuoteCard, setQuoteCardHoverEnabled, setSelectionHighlighter } from './ui/quote-card-panel'
+import { highlightModeFor, refreshHighlightStatus, runHighlight } from './lib/selection-highlight'
 import { quoteStoryRoot } from './lib/quote-card'
 import { mountSelfCiteBall, unmountSelfCiteBall } from './ui/self-cite-panel'
 import { clipCurrentMediumArticleAsMarkdown } from './markdown/medium-to-markdown'
@@ -122,6 +123,7 @@ if (window === window.top && !alreadyLoaded) {
   const applyFeaturesForCurrentSite = (items) => {
     setQuoteCardHoverEnabled(items.quoteCardHoverEnabled)
     setInPageHighlightsEnabled(items.bookshelfEnabled && items.bookshelfInPageHighlights)
+    void refreshHighlightStatus()
     if (items.selfCiteEnabled) {
       mountSelfCiteBall() // no-ops itself when not on a Medium editor page
     } else {
@@ -136,6 +138,7 @@ if (window === window.top && !alreadyLoaded) {
     bookshelfInPageHighlights: true,
   }
 
+  setSelectionHighlighter({ modeFor: highlightModeFor, run: runHighlight })
   mountQuoteCardButton()
 
   let settingsVersion = 0
@@ -156,7 +159,7 @@ if (window === window.top && !alreadyLoaded) {
   window.addEventListener('focus', () => reportPage(0))
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !(changes.selfCiteEnabled || changes.quoteCardHoverEnabled || changes.bookshelfEnabled || changes.bookshelfInPageHighlights)) return
+    if (area !== 'local' || !(changes.selfCiteEnabled || changes.quoteCardHoverEnabled || changes.bookshelfEnabled || changes.bookshelfInPageHighlights || changes.enhancerProUnlocked || changes.enhancerProKey)) return
     // Invalidate pending settings reads and close immediately on disable.
     settingsVersion++
     if (changes.selfCiteEnabled) {

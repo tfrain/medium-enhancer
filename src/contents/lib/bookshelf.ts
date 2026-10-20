@@ -60,5 +60,8 @@ export const highlightCurrentStory = async (selectionText = '') => {
     before.setEnd(range.startContainer, range.startOffset)
     occurrence = occurrenceAt(block.textContent || '', text, before.toString().length)
   }
+  // Highlighting an unsaved story saves it first (and archives it for Pro).
+  const status = await bookshelfRequest({ action: 'status' })
+  if (!status.saved) await saveCurrentStory()
   return bookshelfRequest({ action: 'highlight', url: window.location.href, text, paragraphId: findParagraphId(element, article), occurrence })
 }

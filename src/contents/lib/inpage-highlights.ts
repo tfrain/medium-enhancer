@@ -6,7 +6,7 @@ import { quoteStoryRoot } from './quote-card'
 // (a title attribute, a data-* value) is readable by Medium's own scripts.
 type PageHighlight = { id?: number; text: string; paragraphId?: string; occurrence?: number }
 
-const MARK_CLASS = 'me-shelf-hl'
+export const MARK_CLASS = 'me-shelf-hl'
 const STYLE_ID = '__me_shelf_hl_style__'
 const BLOCKS = 'p, li, blockquote, h2, h3, h4, figcaption'
 let enabled = false
@@ -106,6 +106,30 @@ const stopWatching = () => {
   observer = null
   window.clearTimeout(repaintTimer)
 }
+
+// Highlight ids whose marks the range touches (to offer "Remove highlight").
+export const highlightIdsIn = (range: Range): number[] => {
+  const ids = new Set<number>()
+  document.querySelectorAll(`mark.${MARK_CLASS}`).forEach(mark => {
+    const id = Number((mark as HTMLElement).dataset.meHl)
+    if (Number.isSafeInteger(id) && range.intersectsNode(mark)) ids.add(id)
+  })
+  return [...ids]
+}
+
+// Clicking a mark selects the whole highlight, which brings up the selection
+// toolbar with "Remove highlight". A drag-selection is left alone.
+document.addEventListener('click', event => {
+  const mark = (event.target as Element | null)?.closest?.(`mark.${MARK_CLASS}`) as HTMLElement | null
+  const selection = window.getSelection()
+  if (!mark || !selection || !selection.isCollapsed) return
+  const parts = Array.from(document.querySelectorAll(`mark.${MARK_CLASS}`)).filter(m => (m as HTMLElement).dataset.meHl === mark.dataset.meHl)
+  const range = document.createRange()
+  range.setStartBefore(parts[0])
+  range.setEndAfter(parts[parts.length - 1])
+  selection.removeAllRanges()
+  selection.addRange(range)
+})
 
 export const clearInPageHighlights = () => {
   generation++

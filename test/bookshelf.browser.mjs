@@ -140,6 +140,39 @@ try {
   await page.waitForFunction(() => !document.querySelector('mark.me-shelf-hl'), { polling: 100, timeout: 5000 })
   await worker.evaluate(() => chrome.storage.local.set({ bookshelfInPageHighlights: true }))
   await page.waitForFunction(() => !!document.querySelector('#a1b2 mark.me-shelf-hl'), { polling: 100, timeout: 8000 })
+  // Selection toolbar (0.10.x): select -> "ME | Highlight | Card"; Highlight marks it;
+  // selecting it again offers "Remove highlight"; clicking a mark selects it.
+  await page.bringToFront()
+  // Select characters [from, to) of a paragraph, across marks/inline nodes.
+  const selectIn = (id, from, to) => page.evaluate((id, from, to) => {
+    const walker = document.createTreeWalker(document.getElementById(id), NodeFilter.SHOW_TEXT)
+    const range = document.createRange()
+    let seen = 0
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const end = seen + node.data.length
+      if (from >= seen && from <= end) range.setStart(node, from - seen)
+      if (to >= seen && to <= end) { range.setEnd(node, to - seen); break }
+      seen = end
+    }
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range)
+  }, id, from, to)
+  const toolbarLabel = () => page.$eval('#__me_selection_highlight__', b => b.hidden ? '(hidden)' : b.textContent)
+  await selectIn('c3d4', 0, 17) // "Another paragraph"
+  await page.waitForSelector('#__me_selection_toolbar__', { visible: true })
+  assert.ok(await page.$('#__me_selection_toolbar__ #__me_quote_card_button__'), 'Card sits in the same toolbar')
+  await page.waitForFunction(() => document.getElementById('__me_selection_highlight__')?.textContent === 'Highlight', { polling: 100, timeout: 5000 })
+  await page.click('#__me_selection_highlight__')
+  await page.waitForFunction(() => document.querySelector('#c3d4 mark.me-shelf-hl')?.textContent === 'Another paragraph', { polling: 100, timeout: 8000 })
+  await selectIn('c3d4', 0, 7)
+  await page.waitForFunction(() => document.getElementById('__me_selection_highlight__')?.textContent === 'Remove highlight', { polling: 100, timeout: 5000 })
+  await page.click('#__me_selection_highlight__')
+  await page.waitForFunction(() => !document.querySelector('#c3d4 mark.me-shelf-hl'), { polling: 100, timeout: 8000 })
+  assert.ok(await page.$('#a1b2 mark.me-shelf-hl'), 'removing one highlight leaves the others')
+  await page.evaluate(() => window.getSelection().removeAllRanges())
+  await page.click('#a1b2 mark.me-shelf-hl')
+  await page.waitForFunction(() => document.getElementById('__me_selection_highlight__')?.textContent === 'Remove highlight', { polling: 100, timeout: 5000 })
+  await page.evaluate(() => window.getSelection().removeAllRanges())
+  await shelf.bringToFront() // rAF-driven waits below run on the Bookshelf tab
   await shelf.type('input[type="search"]', 'wombat')
   await shelf.waitForFunction(() => document.querySelector('.shelf-snippet')?.textContent.includes('wombat'))
   await shelf.$eval('input[type="search"]', el => { const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(el, ''); el.dispatchEvent(new Event('input', { bubbles: true })) })
@@ -161,7 +194,7 @@ try {
   const markdown = zip.subarray(30 + nameSize, 30 + nameSize + dataSize).toString('utf8')
   for (const value of ['title: "A bookshelf story"', 'author: "Test Author"', 'publication: "Test Publication"', 'quokka', 'remember the wombat note', '> -']) assert.ok(markdown.includes(value), value)
   assert.deepEqual(errors, [])
-  console.log('PASS offline Bookshelf: RSS feed via pageReport, copy page as Markdown, in-page highlights (note kept out of the page DOM) and toggle, popup save, read filters, delete/undo, context capture path, test-only Pro archive/highlight, note search, archive search and ZIP download')
+  console.log('PASS offline Bookshelf: selection toolbar highlight/remove/click-to-select, RSS feed via pageReport, copy page as Markdown, in-page highlights (note kept out of the page DOM) and toggle, popup save, read filters, delete/undo, context capture path, test-only Pro archive/highlight, note search, archive search and ZIP download')
 } finally {
   if (browser) await browser.close()
   fs.rmSync(root, { recursive: true, force: true })

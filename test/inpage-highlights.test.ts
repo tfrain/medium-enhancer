@@ -41,6 +41,11 @@ const stored = [
 ]
 const db = {
   getBookshelfHighlights: async (key: string) => stored.filter(h => h.itemKey === key),
+  deleteBookshelfHighlight: async (id: number, key: string) => {
+    const i = stored.findIndex(h => h.id === id)
+    if (i < 0 || stored[i].itemKey !== key) throw new Error('That highlight is not on this story.')
+    stored.splice(i, 1)
+  },
   getBookshelfItem: async () => undefined, listBookshelf: async () => ({ items: [], highlights: [] }),
   saveBookshelfItem: async () => { throw new Error('unused') }, addBookshelfHighlight: async () => { throw new Error('unused') },
   updateBookshelfNote: async () => {}, deleteBookshelfItem: async () => ({ highlights: [] }), restoreBookshelfItem: async () => {},
@@ -62,6 +67,15 @@ assert.ok(!JSON.stringify(got).includes('why it matters'), 'private notes never 
 assert.equal(got[1].occurrence, 0, 'missing occurrence becomes 0')
 await assert.rejects(() => ask({ ...sender, frameId: 2 }), /story/i, 'iframes cannot read highlights')
 await assert.rejects(() => ask({ url: 'https://evil.example/', tab: { id: 9 } }), /story/i, 'non-story senders cannot read highlights')
+// unhighlight: scoped to the sender's story, not Pro-gated, rejects foreign ids.
+const unhighlight = (ids: any, from: any = sender) => handle({ type: 'bookshelf', action: 'unhighlight', url, ids }, from)
+await assert.rejects(() => unhighlight([3]), /not on this story/, 'cannot delete another story\'s highlight')
+await assert.rejects(() => unhighlight([1], { ...sender, frameId: 2 }), /story/i, 'iframes cannot delete')
+await assert.rejects(() => unhighlight([]), /No highlight/)
+pro = false
+assert.equal(local(await unhighlight([2, 2, 'x'])).removed, 1, 'free users can remove their own highlight; ids are de-duplicated and validated')
+assert.deepEqual(stored.map(h => h.id), [1, 3])
+pro = true
 enabled = false
 assert.deepEqual((await ask()).highlights, [], 'disabled Bookshelf leaves the page plain')
 

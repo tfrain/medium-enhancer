@@ -32,8 +32,9 @@ try {
     './ui/summary-panel': { disposePanel: () => {} },
     './ui/quote-card-panel': {
       mountQuoteCardButton: () => {}, setQuoteCardHoverEnabled: (value: boolean) => hover.push(value),
-      resetQuoteCard: () => { resets++ },
+      resetQuoteCard: () => { resets++ }, setSelectionHighlighter: () => {},
     },
+    './lib/selection-highlight': { highlightModeFor: () => 'off', refreshHighlightStatus: async () => {}, runHighlight: async () => {} },
     './ui/self-cite-panel': { mountSelfCiteBall: () => { selfCiteMounted++ }, unmountSelfCiteBall: () => {} },
     './markdown/medium-to-markdown': {}, '../shared/obsidian-clip': {},
     './lib/quote-card': { quoteStoryRoot: () => storyRoot },

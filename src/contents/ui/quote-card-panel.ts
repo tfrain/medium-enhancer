@@ -7,6 +7,8 @@ import { createQuoteHover } from './quote-hover'
 const PANEL_ID = '__me_quote_card_panel__'
 export const QUOTE_PANEL_LEAVE_MS = 600
 const BUTTON_ID = '__me_quote_card_button__'
+const TOOLBAR_ID = '__me_selection_toolbar__'
+const HIGHLIGHT_ID = '__me_selection_highlight__'
 const CSS = `
 #${PANEL_ID} {
   position: fixed; top: 80px; right: 24px; width: 520px; max-width: calc(100vw - 32px);
@@ -34,17 +36,30 @@ const CSS = `
 #${PANEL_ID} .me-qc-note { font-size: 11px; color: #666; margin: 6px 0; overflow-wrap: anywhere; }
 #${PANEL_ID} label { display: block; font: inherit; }
 #${PANEL_ID} input { width: 100%; background: #fafafa; color: #222; border: 1px solid #ddd; border-radius: 4px; padding: 6px; font: inherit; }
-#${BUTTON_ID}[hidden] { display: none; }
-#${BUTTON_ID} {
-  position: fixed; padding: 4px 10px; border: 0; border-radius: 14px; background: #1a8917; color: #fff;
-  box-shadow: 0 3px 12px rgba(0,0,0,0.2); cursor: pointer; z-index: 2147483646;
-  font: 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+#${TOOLBAR_ID}[hidden], #${TOOLBAR_ID} [hidden] { display: none; }
+#${TOOLBAR_ID} {
+  position: fixed; display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 16px;
+  background: #1a8917; color: #fff; box-shadow: 0 3px 12px rgba(0,0,0,0.2); z-index: 2147483646;
+  font: 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; white-space: nowrap;
 }
+#${TOOLBAR_ID} .me-tb-logo { font-weight: 700; font-size: 10px; letter-spacing: .5px; padding: 0 6px 0 7px; opacity: .85; }
+#${TOOLBAR_ID} button {
+  padding: 3px 10px; border: 0; border-radius: 13px; background: transparent; color: #fff; cursor: pointer; font: inherit;
+}
+#${TOOLBAR_ID} button:hover, #${TOOLBAR_ID} button:focus-visible { background: rgba(255,255,255,0.22); outline: none; }
 `
 
 let panel: HTMLDivElement | null = null
 let panelCleanup: (() => void) | null = null
-let button: HTMLButtonElement | null = null
+let button: HTMLButtonElement | null = null // the toolbar's Card button
+let toolbar: HTMLDivElement | null = null
+let highlightButton: HTMLButtonElement | null = null
+type HighlightMode = 'add' | 'remove' | 'pro' | 'off'
+type SelectionHighlighter = { modeFor: (range: Range) => HighlightMode; run: (mode: HighlightMode, range: Range, text: string) => Promise<void> }
+let highlighter: SelectionHighlighter | null = null
+let toolbarMode: HighlightMode = 'off'
+// Wired by the content script entry so this module stays independent of Bookshelf.
+export const setSelectionHighlighter = (value: SelectionHighlighter | null) => { highlighter = value }
 let selectedCard: QuoteCard | null = null
 let selectedUrl = ''
 let contextCard: { card: QuoteCard; url: string } | null = null
@@ -288,14 +303,14 @@ export const showQuoteCardPanel = async (card: QuoteCard) => {
     chrome.storage.onChanged.removeListener(onProChanged)
     window.clearInterval(expiryCheck)
     document.removeEventListener('keydown', onKeyDown, true)
-    if (previousFocus === button && button) button.hidden = false
+    if (previousFocus === button && toolbar) toolbar.hidden = false
     if (previousFocus?.isConnected) previousFocus.focus()
   }
-  if (button) button.hidden = true
+  if (toolbar) toolbar.hidden = true
   root.focus()
 }
 
-const hideButton = () => { if (button) button.hidden = true }
+const hideButton = () => { if (toolbar) toolbar.hidden = true }
 const updateSelection = () => {
   selectionFrame = 0
   const selection = window.getSelection()
@@ -303,19 +318,43 @@ const updateSelection = () => {
   selectedUrl = window.location.href
   if (!selectedCard || !selection?.rangeCount) { hideButton(); return }
   ensureCSS()
-  if (!button) {
+  if (!toolbar) {
+    toolbar = document.createElement('div')
+    toolbar.id = TOOLBAR_ID
+    toolbar.setAttribute('role', 'toolbar')
+    toolbar.setAttribute('aria-label', 'Medium Enhancer')
+    toolbar.onmousedown = e => e.preventDefault() // keep the selection
+    const logo = document.createElement('span')
+    logo.className = 'me-tb-logo'
+    logo.textContent = 'ME'
+    logo.title = 'Medium Enhancer'
+    highlightButton = document.createElement('button')
+    highlightButton.id = HIGHLIGHT_ID
+    highlightButton.onclick = () => {
+      const current = window.getSelection()
+      if (!highlighter || !current?.rangeCount || current.isCollapsed) return
+      const range = current.getRangeAt(0).cloneRange()
+      void highlighter.run(toolbarMode, range, current.toString()).finally(onSelectionChange)
+    }
     button = document.createElement('button')
     button.id = BUTTON_ID
     button.textContent = 'Card'
     button.title = 'Make a quote card from the selection'
-    button.onmousedown = e => e.preventDefault()
     button.onclick = () => { if (selectedCard && selectedUrl === window.location.href) void showQuoteCardPanel(selectedCard) }
-    document.body.appendChild(button)
+    toolbar.append(logo, highlightButton, button)
+    document.body.appendChild(toolbar)
   }
-  const rect = selection.getRangeAt(0).getBoundingClientRect()
-  button.style.left = `${Math.max(8, Math.min(window.innerWidth - 64, rect.right + 6))}px`
-  button.style.top = `${Math.max(8, Math.min(window.innerHeight - 36, rect.bottom + 6))}px`
-  button.hidden = false
+  const range = selection.getRangeAt(0)
+  toolbarMode = highlighter ? highlighter.modeFor(range) : 'off'
+  highlightButton!.hidden = toolbarMode === 'off'
+  highlightButton!.textContent = toolbarMode === 'remove' ? 'Remove highlight' : toolbarMode === 'pro' ? 'Highlight · Pro' : 'Highlight'
+  highlightButton!.title = toolbarMode === 'remove' ? 'Remove this highlight from your Bookshelf'
+    : toolbarMode === 'pro' ? 'Private highlights are part of Pro' : 'Highlight and save to your Bookshelf'
+  toolbar.hidden = false
+  const rect = range.getBoundingClientRect()
+  const width = toolbar.offsetWidth || 160
+  toolbar.style.left = `${Math.max(8, Math.min(window.innerWidth - width - 8, rect.right + 6))}px`
+  toolbar.style.top = `${Math.max(8, Math.min(window.innerHeight - 36, rect.bottom + 6))}px`
 }
 const onSelectionChange = () => {
   if (window.getSelection()?.isCollapsed === false) hover.hide()

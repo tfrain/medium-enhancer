@@ -93,7 +93,7 @@ const html = `<!doctype html><html><head><title>A story</title><meta name="autho
         selection.removeAllRanges()
         selection.addRange(range)
       }, startId, endId)
-      await page.waitForFunction(() => document.getElementById('__me_quote_card_button__')?.hidden)
+      await page.waitForFunction(() => document.getElementById('__me_selection_toolbar__')?.hidden)
     }
     await select('a1b2')
     await page.waitForSelector('#__me_quote_card_button__', { visible: true })

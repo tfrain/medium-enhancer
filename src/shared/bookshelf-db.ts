@@ -83,6 +83,15 @@ export const addBookshelfHighlight = (highlight: BookshelfHighlight): Promise<Bo
     return { ...highlight, id: Number(id) }
   })
 
+// Remove one highlight, only if it belongs to itemKey (the story the sender shows).
+export const deleteBookshelfHighlight = (id: number, itemKey: string): Promise<void> =>
+  transaction(['highlights'], 'readwrite', async tx => {
+    const store = tx.objectStore('highlights')
+    const highlight = await resultOf<BookshelfHighlight | undefined>(store.get(id))
+    if (!highlight || highlight.itemKey !== itemKey) throw new Error('That highlight is not on this story.')
+    await resultOf(store.delete(id))
+  })
+
 export const updateBookshelfNote = (id: number, note: string): Promise<void> =>
   transaction(['highlights'], 'readwrite', async tx => {
     const store = tx.objectStore('highlights')
