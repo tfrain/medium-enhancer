@@ -1,7 +1,7 @@
 import { isPro } from './pro'
 import { mediumPostId } from './medium-url'
 import { normalizeItem, archiveItem, normalizeHighlight, requireBookshelfPro, type BookshelfMetadata } from './bookshelf-model'
-import { listBookshelf, getBookshelfItem, getBookshelfHighlights, deleteBookshelfHighlight, saveBookshelfItem, addBookshelfHighlight, updateBookshelfNote, deleteBookshelfItem, restoreBookshelfItem, type BookshelfDeleted } from './bookshelf-db'
+import { getBookshelfItem, getBookshelfHighlights, deleteBookshelfHighlight, saveBookshelfItem, addBookshelfHighlight, updateBookshelfNote, deleteBookshelfItem, restoreBookshelfItem, type BookshelfDeleted } from './bookshelf-db'
 import { exportMarkdown } from './bookshelf-export'
 
 export type BookshelfMessage = { type: 'bookshelf' } & (

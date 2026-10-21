@@ -35,7 +35,11 @@ export const exportFiles = (items: BookshelfItem[], highlights: BookshelfHighlig
   requireBookshelfPro(pro)
   const used = new Set<string>()
   const grouped = new Map<string, BookshelfHighlight[]>()
-  for (const h of highlights) grouped.set(h.itemKey, [...(grouped.get(h.itemKey) || []), h])
+  for (const h of highlights) {
+    let group = grouped.get(h.itemKey)
+    if (!group) { group = []; grouped.set(h.itemKey, group) }
+    group.push(h)
+  }
   return items.map(item => {
     const stem = filenameStem(item.title)
     let name = `${stem}.md`

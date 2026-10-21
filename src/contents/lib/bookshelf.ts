@@ -42,6 +42,10 @@ export const saveCurrentStory = async (archiveOnly = false, expectedKey?: string
   return { ...response, warning }
 }
 export const highlightCurrentStory = async (selectionText = '') => {
+  const url = window.location.href
+  const checkUrl = () => {
+    if (window.location.href !== url) throw new Error('The story in this tab changed. Select the text again.')
+  }
   const selection = window.getSelection()
   const article = quoteStoryRoot()
   // Reuse the quote-card selection boundary checks, including intersected noise.
@@ -62,6 +66,11 @@ export const highlightCurrentStory = async (selectionText = '') => {
   }
   // Highlighting an unsaved story saves it first (and archives it for Pro).
   const status = await bookshelfRequest({ action: 'status' })
-  if (!status.saved) await saveCurrentStory()
-  return bookshelfRequest({ action: 'highlight', url: window.location.href, text, paragraphId: findParagraphId(element, article), occurrence })
+  checkUrl()
+  if (!status.saved) {
+    await saveCurrentStory()
+    checkUrl()
+  }
+  // Saved under the pinned url, so navigating away after this point is harmless.
+  return bookshelfRequest({ action: 'highlight', url, text, paragraphId: findParagraphId(element, article), occurrence })
 }

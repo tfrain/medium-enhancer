@@ -141,9 +141,9 @@ export const clearInPageHighlights = () => {
 // Fetch this story's highlights and paint them. Also called when the tab comes
 // back into view, so deletions made on the Bookshelf page show up here.
 export const applyInPageHighlights = async () => {
+  const run = ++generation
   const article = quoteStoryRoot()
   if (!enabled || !article) return
-  const run = generation
   let highlights: PageHighlight[] = []
   try { highlights = (await bookshelfRequest<{ highlights: PageHighlight[] }>({ action: 'pageHighlights' })).highlights || [] }
   catch { return } // not a saved story, or the extension was reloaded: leave the page alone

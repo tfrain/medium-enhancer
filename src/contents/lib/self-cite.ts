@@ -117,6 +117,7 @@ export const scoreRelevance = (draftTitle: string, candidateTitle: string): numb
 }
 
 let cache: { username: string; posts: SelfCitePost[]; fetchedAt: number } | null = null
+const inFlight = new Map<string, Promise<SelfCitePost[]>>()
 const CACHE_TTL_MS = 10 * 60 * 1000 // 10min — avoid refetching on every URL-poll tick
 
 const graphqlData = (json: any): any => {
@@ -157,6 +158,19 @@ export const fetchAllStories = async (username: string): Promise<SelfCitePost[]>
     return cache.posts.slice()
   }
 
+  let pending = inFlight.get(username)
+  if (!pending) {
+    pending = loadAllStories(username)
+    inFlight.set(username, pending)
+  }
+  try {
+    return (await pending).slice()
+  } finally {
+    if (inFlight.get(username) === pending) inFlight.delete(username)
+  }
+}
+
+const loadAllStories = async (username: string): Promise<SelfCitePost[]> => {
   const posts: SelfCitePost[] = []
   const seen = new Set<string>()
   let after = ''
