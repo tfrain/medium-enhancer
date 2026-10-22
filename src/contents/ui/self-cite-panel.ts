@@ -244,8 +244,8 @@ const renderPanel = (
       badge.className = `me-sc-relevance ${band}`
       badge.textContent = band === 'high' ? 'High match' : band === 'mid' ? 'Medium match' : 'Low match'
       meta.appendChild(badge)
-      const pub = p.publication ? `${p.publication} · ` : ''
-      meta.appendChild(document.createTextNode(`${pub}$${p.revenueUsd.toFixed(2)}`))
+      // Earnings rank the list in memory only; never written into Medium's page DOM (AGENTS.md §3).
+      if (p.publication) meta.appendChild(document.createTextNode(p.publication))
       item.appendChild(meta)
 
       item.addEventListener('click', () => {
