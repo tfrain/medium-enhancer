@@ -13,8 +13,8 @@ export const mediumStoryDocumentPatterns = [
   'https://*.medium.com/*',
   ...Array.from(knownMediumPublicationHosts, host => `https://${host}/*`),
 ]
-export const isKnownMediumPublicationHost = (hostname: string): boolean =>
-  knownMediumPublicationHosts.has(hostname.toLowerCase())
+export const isKnownMediumPublicationHost = (hostname: string, customHosts: readonly string[] = []): boolean =>
+  knownMediumPublicationHosts.has(hostname.toLowerCase()) || customHosts.some(host => host.toLowerCase() === hostname.toLowerCase())
 
 export const reservedMediumPaths = new Set([
   "about",
@@ -40,10 +40,10 @@ export const mediumPathParts = (url: string): string[] => {
   }
 }
 
-export const mediumPostId = (url: string): string | null => {
+export const mediumPostId = (url: string, customHosts: readonly string[] = []): string | null => {
   try {
     const u = new URL(url)
-    if (!/^https?:$/.test(u.protocol) || (!isMediumHost(u.hostname) && !isKnownMediumPublicationHost(u.hostname))) return null
+    if (!/^https?:$/.test(u.protocol) || (!isMediumHost(u.hostname) && !isKnownMediumPublicationHost(u.hostname, customHosts))) return null
     const short = u.pathname.match(/^\/p\/([0-9a-f]{12})\/?$/i)
     if (short) return short[1].toLowerCase()
     const parts = u.pathname.split('/').filter(Boolean)
@@ -53,24 +53,24 @@ export const mediumPostId = (url: string): string | null => {
   } catch { return null }
 }
 
-export const buildParagraphLink = (canonicalUrl: string, paragraphId: string): string => {
-  const postId = mediumPostId(canonicalUrl)
+export const buildParagraphLink = (canonicalUrl: string, paragraphId: string, customHosts: readonly string[] = []): string => {
+  const postId = mediumPostId(canonicalUrl, customHosts)
   return postId && /^[0-9a-f]{4}$/.test(paragraphId)
     ? `https://medium.com/p/${postId}#${paragraphId}`
     : canonicalUrl
 }
 
 export const classifyMediumUrl = (
-  url: string
+  url: string, customHosts: readonly string[] = []
 ): "article" | "profile" | "publication" | null => {
   try {
     const u = new URL(url)
     if (!/^https?:$/.test(u.protocol)) return null
     const medium = isMediumHost(u.hostname)
-    const publication = isKnownMediumPublicationHost(u.hostname)
+    const publication = isKnownMediumPublicationHost(u.hostname, customHosts)
     if (!medium && !publication) return null
     const parts = mediumPathParts(url)
-    if (mediumPostId(url) || /-[0-9a-f]{10,}$/i.test(parts.at(-1) || "")) return "article"
+    if (mediumPostId(url, customHosts) || /-[0-9a-f]{10,}$/i.test(parts.at(-1) || "")) return "article"
     if (medium && parts.length === 1 && parts[0].startsWith("@"))
       return "profile"
     if (u.hostname !== "medium.com" && parts.length === 0) return "publication"

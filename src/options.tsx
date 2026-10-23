@@ -1,3 +1,4 @@
+import { readCustomMediumHosts } from './shared/custom-medium-hosts';
 import { DEFAULT_AI_PROVIDER, DEFAULT_OLLAMA_URL, DEFAULT_MODELS, getAiConfig, readAiSettings, type AiProvider } from "./shared/ai-defaults";
 import { PRO_GET_KEY_URL, canGetProKey, proStatus, tryUnlock, type ProStatus } from "./shared/pro";
 import { ARTICLE_URL } from "./shared/whats-new"
@@ -102,6 +103,23 @@ const formatModelLabel = (m: OllamaModelInfo): string => {
 };
 
 const Options = () => {
+  const [customHosts, setCustomHosts] = useState<string[]>([]);
+  const [customHostError, setCustomHostError] = useState('');
+  useEffect(() => {
+    const refresh = () => { readCustomMediumHosts().then(setCustomHosts).catch(error => setCustomHostError(error.message)); };
+    const changed = (changes, area) => { if (area === 'local' && changes.customMediumHosts) refresh(); };
+    refresh();
+    chrome.storage.onChanged.addListener(changed);
+    return () => chrome.storage.onChanged.removeListener(changed);
+  }, []);
+  const removeCustomHost = async (host: string) => {
+    setCustomHostError('');
+    try {
+      const result = await chrome.runtime.sendMessage({ type: 'removeCustomMediumHost', host });
+      if (!result?.ok) throw new Error(result?.error || 'Could not remove site access.');
+      setCustomHosts(await readCustomMediumHosts());
+    } catch (error) { setCustomHostError((error as Error).message); }
+  };
 	const [enabled, setEnabled] = useState<Record<string, boolean>>(BOOL_DEFAULTS);
 	const [ollamaUrl, setOllamaUrl] = useState(DEFAULT_OLLAMA_URL);
 	const [ollamaModel, setOllamaModel] = useState(DEFAULT_OLLAMA_MODEL);
@@ -418,6 +436,16 @@ const Options = () => {
 					<p className="opt-sub">Settings · v{version}</p>
 				</div>
 			</header>
+
+      <section className="card">
+        <h2>Custom Medium domains</h2>
+        <p className="hint">Enable a publication from the extension popup on its story page.</p>
+        {customHosts.length === 0 && <p>No custom domains enabled.</p>}
+        {customHosts.map(host => <div className="row" key={host}>
+          <span>{host}</span><button type="button" onClick={() => removeCustomHost(host)}>Remove</button>
+        </div>)}
+        {customHostError && <p role="alert">{customHostError}</p>}
+      </section>
 
 			<section className="card">
 				<h2>Features</h2>

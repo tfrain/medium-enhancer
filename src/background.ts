@@ -1,3 +1,4 @@
+import { readCustomMediumHosts, enableCustomMediumHost, removeCustomMediumHost, reconcileCustomMediumHosts } from './shared/custom-medium-hosts'
 import { handleBookshelfMessage } from './shared/bookshelf-service'
 import { isPro } from './shared/pro'
 import { ARTICLE_URL, shouldOpenArticleOnUpdate } from "./shared/whats-new"
@@ -96,6 +97,16 @@ const handleSendToObsidian = async (
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'enableCustomMediumHost' || message?.type === 'removeCustomMediumHost') {
+    if (sender.tab || !sender.url?.startsWith(chrome.runtime.getURL(''))) {
+      sendResponse({ ok: false, error: 'Only extension pages can manage site access.' })
+      return
+    }
+    const task = message.type === 'enableCustomMediumHost'
+      ? enableCustomMediumHost(message.host, message.tabId) : removeCustomMediumHost(message.host)
+    task.then(() => sendResponse({ ok: true })).catch(error => sendResponse({ ok: false, error: error.message }))
+    return true
+  }
   if (message?.type === 'bookshelf') {
     handleBookshelfMessage(message, sender).then(sendResponse)
       .catch(error => sendResponse({ ok: false, error: error.message || String(error) }))
@@ -111,13 +122,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return
   }
   if (message?.type === 'downloadQuoteCard') {
-    if (!sender.tab || !mediumPostId(sender.url || sender.tab.url || '')) {
-      sendResponse({ ok: false, error: 'Quote cards are available on Medium stories.' })
-      return
-    }
-    triggerPngDownload(String(message.title || 'Quote card'), String(message.dataUrl || ''))
-      .then(() => sendResponse({ ok: true }))
-      .catch(error => sendResponse({ ok: false, error: error.message || 'Download failed.' }))
+    void (async () => {
+      if (!sender.tab || !mediumPostId(sender.url || sender.tab.url || '', await readCustomMediumHosts())) {
+        sendResponse({ ok: false, error: 'Quote cards are available on Medium stories.' })
+        return
+      }
+      await triggerPngDownload(String(message.title || 'Quote card'), String(message.dataUrl || ''))
+      sendResponse({ ok: true })
+    })().catch(error => sendResponse({ ok: false, error: error.message }))
     return true
   }
   if (message?.type !== "send-to-obsidian") return
@@ -171,7 +183,7 @@ chrome.contextMenus.onClicked.addListener(async (item, tab) => {
     await chrome.tabs.sendMessage(tab.id, { type: 'showExportToast', text }).catch(() => {})
     return
   }
-  if (item.menuItemId === 'quote_card_menu' && mediumPostId(item.pageUrl || tab.url || '')) {
+  if (item.menuItemId === 'quote_card_menu' && mediumPostId(item.pageUrl || tab.url || '', await readCustomMediumHosts())) {
     await sendToTab(tab.id, { type: 'showQuoteCard', selectionText: item.selectionText || '' })
       .catch(e => console.warn('[bg] cannot make quote card', e))
   }
@@ -234,7 +246,7 @@ const updateQuoteCardMenu = (pageUrl?: string) => quoteMenuUpdate = quoteMenuUpd
   const url = pageUrl ?? (await getCurrentTab())?.url ?? ''
   const { bookshelfEnabled } = await chrome.storage.local.get({ bookshelfEnabled: true })
   const pro = await isPro()
-  const story = !!mediumPostId(url)
+  const story = !!mediumPostId(url, await readCustomMediumHosts())
   // contextMenus.update for every report would be wasted work; skip unchanged states.
   const state = JSON.stringify([story, bookshelfEnabled, pro])
   if (state === lastMenuState) return
@@ -261,16 +273,17 @@ chrome.runtime.onUpdateAvailable.addListener(() => chrome.runtime.reload())
 let menuUpdate = Promise.resolve()
 const ensureContextMenus = () => menuUpdate = menuUpdate.catch(() => {}).then(async () => {
   const { aiSummaryEnabled, obsidianClipperEnabled } = await chrome.storage.local.get({ aiSummaryEnabled: true, obsidianClipperEnabled: false })
+  const documentUrlPatterns = [...mediumStoryDocumentPatterns, ...(await readCustomMediumHosts()).map(host => `https://${host}/*`)]
   await chrome.contextMenus.removeAll()
   lastMenuState = '' // menus are recreated hidden; force the next update through
   chrome.contextMenus.create({
     id: 'quote_card_menu', title: 'Make quote card', contexts: ['selection'],
-    documentUrlPatterns: mediumStoryDocumentPatterns, visible: false,
+    documentUrlPatterns, visible: false,
   })
   chrome.contextMenus.create({ id: 'bookshelf_save_menu', title: 'Save to Bookshelf', contexts: ['page'],
-    documentUrlPatterns: mediumStoryDocumentPatterns, visible: false })
+    documentUrlPatterns, visible: false })
   chrome.contextMenus.create({ id: 'bookshelf_highlight_menu', title: 'Highlight to Bookshelf (Pro)', contexts: ['selection'],
-    documentUrlPatterns: mediumStoryDocumentPatterns, visible: false, enabled: false })
+    documentUrlPatterns, visible: false, enabled: false })
   await updateQuoteCardMenu()
   if (aiSummaryEnabled) {
     chrome.contextMenus.create({
@@ -294,7 +307,7 @@ const ensureContextMenus = () => menuUpdate = menuUpdate.catch(() => {}).then(as
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && (changes.aiSummaryEnabled || changes.obsidianClipperEnabled || changes.bookshelfEnabled)) ensureContextMenus()
+  if (area === 'local' && (changes.aiSummaryEnabled || changes.obsidianClipperEnabled || changes.bookshelfEnabled || changes.customMediumHosts)) ensureContextMenus()
   if ((area === 'local' || area === 'sync') && (changes.enhancerProKey || changes.enhancerProUnlocked)) void updateQuoteCardMenu()
 })
 
@@ -304,6 +317,8 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.runtime.onInstalled.addListener(async (details) => {
+  // Not awaited: install/update work (menus, the What's New tab) must not wait on it.
+  void reconcileCustomMediumHosts().catch(error => console.warn('[bg] custom domain registration failed', error))
   ensureContextMenus();
   // Per-tab feeds moved to storage.session in 0.10; drop the old local copies.
   chrome.storage.local.get(null).then(all => chrome.storage.local.remove(Object.keys(all).filter(k => k.startsWith('feeds_')))).catch(() => {})
@@ -352,7 +367,8 @@ const isLoggedInMediumViewerLink = (url: string) => {
 const authorFeedFromProfileURL = (url: string): string | null => {
   try {
     const u = new URL(url)
-    const match = u.pathname.match(/^\/(@[^/?]+)\/?$/)
+    // Any host's /@handle (medium.com, itnext.io, custom domains), with or without a trailing segment like /following.
+    const match = u.protocol === 'https:' ? u.pathname.match(/^\/(@[A-Za-z0-9_.-]+)(?:\/|$)/) : null
     if (!match) return null
     return `${u.hostname}/feed/${match[1]}`
   } catch {
@@ -380,10 +396,10 @@ const cleanSignals = (value: any): FeedSignals => ({
     .filter((x: any) => x && typeof x.href === 'string' && typeof x.score === 'number').slice(0, 200) : [],
 })
 
-const computeFeeds = (pageUrl: string, { alternateFeedLinks, anchorFeedLinks, authorProfileLinks }: FeedSignals): Feed[] => {
+const computeFeeds = (pageUrl: string, { alternateFeedLinks, anchorFeedLinks, authorProfileLinks }: FeedSignals, customHosts: readonly string[] = []): Feed[] => {
   const hostname = (() => { try { return new URL(pageUrl).hostname } catch { return '' } })()
   const mediumHost = isMediumHost(hostname)
-  const knownMediumPublicationHost = isKnownMediumPublicationHost(hostname)
+  const knownMediumPublicationHost = isKnownMediumPublicationHost(hostname, customHosts)
 
   let feeds: Feed[] = []
 
@@ -456,7 +472,8 @@ const computeFeeds = (pageUrl: string, { alternateFeedLinks, anchorFeedLinks, au
 // storage.session (cleared with the browser session, so no tabs.onRemoved).
 const reportFeeds = async (tabId: number, pageUrl: string, signals: FeedSignals) => {
   const key = `feeds_${tabId}`
-  const feeds = classifyMediumUrl(pageUrl) ? computeFeeds(pageUrl, signals) : []
+  const customHosts = await readCustomMediumHosts()
+  const feeds = classifyMediumUrl(pageUrl, customHosts) ? computeFeeds(pageUrl, signals, customHosts) : []
   await chrome.action.setBadgeText({ text: feeds.length ? String(feeds.length) : '', tabId }).catch(() => {})
   if (!feeds.length) { await chrome.storage.session.remove(key); return }
   await chrome.action.setBadgeBackgroundColor({ color: '#070707', tabId }).catch(() => {})

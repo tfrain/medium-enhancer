@@ -4,14 +4,14 @@ import { findParagraphId } from '../../shared/quote-card'
 import { occurrenceAt } from '../../shared/highlight-locate'
 import { MEDIUM_SUBTITLE_SELECTOR } from '../../shared/markdown-content'
 import { clipCurrentMediumArticleAsMarkdown } from '../markdown/medium-to-markdown'
-import { readQuoteCard, quoteStoryRoot } from './quote-card'
+import { readQuoteCard, quoteStoryRoot, getCustomMediumHosts } from './quote-card'
 
 const textOf = (node: Element | null) => node?.textContent?.replace(/\s+/g, ' ').trim() || ''
 const meta = (name: string) => document.querySelector<HTMLMetaElement>(`meta[name="${name}"], meta[property="${name}"]`)?.content?.trim() || ''
 export const readBookshelfMetadata = () => {
   const url = window.location.href
   const article = document.querySelector('article')
-  if (!mediumPostId(url) || !article) throw new Error('Open a supported Medium story first.')
+  if (!mediumPostId(url, getCustomMediumHosts()) || !article) throw new Error('Open a supported Medium story first.')
   return {
     url,
     canonicalUrl: document.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href,
@@ -23,7 +23,7 @@ export const readBookshelfMetadata = () => {
 }
 export const saveCurrentStory = async (archiveOnly = false, expectedKey?: string) => {
   const metadata = readBookshelfMetadata()
-  if (expectedKey && mediumPostId(metadata.url) !== expectedKey) throw new Error('The story in this tab changed. Open the saved story and try again.')
+  if (expectedKey && mediumPostId(metadata.url, getCustomMediumHosts()) !== expectedKey) throw new Error('The story in this tab changed. Open the saved story and try again.')
   const status = await bookshelfRequest({ action: 'status' })
   if (!status.enabled) throw new Error('Bookshelf is disabled in Options.')
   if (archiveOnly && !status.pro) throw new Error('Pro is required to archive.')

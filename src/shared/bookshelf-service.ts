@@ -1,3 +1,4 @@
+import { readCustomMediumHosts } from './custom-medium-hosts'
 import { isPro } from './pro'
 import { mediumPostId } from './medium-url'
 import { normalizeItem, archiveItem, normalizeHighlight, requireBookshelfPro, type BookshelfMetadata } from './bookshelf-model'
@@ -21,32 +22,33 @@ const trustedExtension = (sender: chrome.runtime.MessageSender): boolean => {
   const url = sender.url?.split(/[?#]/)[0]
   return ['popup.html', 'options.html', 'tabs/bookshelf.html'].some(path => url === chrome.runtime.getURL(path))
 }
-const storyKey = (sender: chrome.runtime.MessageSender, url: string): string => {
-  const key = mediumPostId(url)
-  if (!sender.tab || (sender.frameId !== undefined && sender.frameId !== 0) || !key || mediumPostId(sender.url || '') !== key) {
+const storyKey = (sender: chrome.runtime.MessageSender, url: string, customHosts: readonly string[]): string => {
+  const key = mediumPostId(url, customHosts)
+  if (!sender.tab || (sender.frameId !== undefined && sender.frameId !== 0) || !key || mediumPostId(sender.url || '', customHosts) !== key) {
     throw new Error('Bookshelf capture must come from the story you are viewing.')
   }
   return key
 }
 export const handleBookshelfMessage = async (message: BookshelfMessage, sender: chrome.runtime.MessageSender): Promise<any> => {
   const { bookshelfEnabled: enabled } = await chrome.storage.local.get({ bookshelfEnabled: true })
+  const customHosts = await readCustomMediumHosts()
   const pro = await isPro()
   if (message.action === 'status') {
-    const key = trustedExtension(sender) ? message.key : storyKey(sender, sender.url || '')
+    const key = trustedExtension(sender) ? message.key : storyKey(sender, sender.url || '', customHosts)
     const item = key ? await getBookshelfItem(key) : undefined
     return { ok: true, enabled, pro, saved: !!item, archived: !!item?.markdown }
   }
   if (message.action === 'pageHighlights') {
     // Read-only and scoped to the story the sender is showing. Free users and a
     // disabled Bookshelf get an empty list, not an error: the page just stays plain.
-    const key = storyKey(sender, sender.url || '')
+    const key = storyKey(sender, sender.url || '', customHosts)
     if (!enabled || !pro) return { ok: true, highlights: [] }
     const list = await getBookshelfHighlights(key)
     return { ok: true, highlights: list.map(({ id, text, paragraphId, occurrence }) => ({ id, text, paragraphId, occurrence: occurrence || 0 })) }
   }
   if (message.action === 'unhighlight') {
     // Removing your own highlight is not gated by Pro; it is scoped to the story you are on.
-    const key = storyKey(sender, message.url)
+    const key = storyKey(sender, message.url, customHosts)
     const ids = Array.isArray(message.ids) ? [...new Set(message.ids.filter(id => Number.isSafeInteger(id)))].slice(0, 50) : []
     if (!ids.length) throw new Error('No highlight selected.')
     for (const id of ids) await deleteBookshelfHighlight(id, key)
@@ -55,7 +57,7 @@ export const handleBookshelfMessage = async (message: BookshelfMessage, sender: 
   if (message.action === 'save' || message.action === 'highlight') {
     if (!enabled) throw new Error('Bookshelf is disabled in Options.')
     const url = message.action === 'save' ? message.metadata?.url : message.url
-    const key = storyKey(sender, url)
+    const key = storyKey(sender, url, customHosts)
     if (message.action === 'highlight') {
       const h = normalizeHighlight(key, message, pro)
       await addBookshelfHighlight(h)
@@ -65,7 +67,7 @@ export const handleBookshelfMessage = async (message: BookshelfMessage, sender: 
     let archived = false
     await saveBookshelfItem(key, existing => {
       if (message.archiveOnly && !existing) throw new Error('Save this story first.')
-      let item = normalizeItem(message.metadata, existing)
+      let item = normalizeItem(message.metadata, existing, Date.now(), customHosts)
       if (pro && message.markdown !== undefined) { item = archiveItem(item, message.markdown, pro); archived = true }
       if (message.archiveOnly && !archived) throw new Error('No rendered article content to archive.')
       return item

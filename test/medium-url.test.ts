@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 
 try {
-  const { classifyMediumUrl } = await import("../src/shared/medium-url.ts")
+  const { classifyMediumUrl, mediumPostId, isKnownMediumPublicationHost, buildParagraphLink } = await import("../src/shared/medium-url.ts")
   for (const [url, expected] of [
     ["https://medium.com/@a/story-abcdef123456?x=1", "article"],
     ["https://a.medium.com/story-abcdef123456", "article"],
@@ -19,6 +19,12 @@ try {
     ["garbage", null]
   ])
     assert.equal(classifyMediumUrl(url!), expected, String(url))
+  const hosts = ['pub.huizhou92.com']
+  assert.equal(isKnownMediumPublicationHost(hosts[0], hosts), true)
+  assert.equal(classifyMediumUrl('https://pub.huizhou92.com/story-b61d5eda73ec', hosts), 'article')
+  assert.equal(mediumPostId('https://pub.huizhou92.com/story-b61d5eda73ec', hosts), 'b61d5eda73ec')
+  assert.equal(classifyMediumUrl('https://pub.huizhou92.com/', hosts), 'publication')
+  assert.equal(buildParagraphLink('https://pub.huizhou92.com/story-b61d5eda73ec', 'abcd', hosts), 'https://medium.com/p/b61d5eda73ec#abcd')
   console.log("PASS Medium URL classification and custom publication domains")
 } catch (error) {
   console.error("FAIL Medium URL classification:", error)

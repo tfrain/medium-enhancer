@@ -7,7 +7,7 @@ import { extractArticle, extractArticleTextForAI } from './lib/extract'
 import { disposePanel, showAiPanel } from './ui/summary-panel'
 import { mountQuoteCardButton, openQuoteCardFromSelection, resetQuoteCard, setQuoteCardHoverEnabled, setSelectionHighlighter } from './ui/quote-card-panel'
 import { highlightModeFor, refreshHighlightStatus, runHighlight } from './lib/selection-highlight'
-import { quoteStoryRoot } from './lib/quote-card'
+import { quoteStoryRoot, setCustomMediumHosts } from './lib/quote-card'
 import { mountSelfCiteBall, unmountSelfCiteBall } from './ui/self-cite-panel'
 import { clipCurrentMediumArticleAsMarkdown } from './markdown/medium-to-markdown'
 import { sendClipToObsidian } from '../shared/obsidian-clip'
@@ -121,6 +121,7 @@ if (window === window.top && !alreadyLoaded) {
   )
 
   const applyFeaturesForCurrentSite = (items) => {
+    setCustomMediumHosts(items.customMediumHosts)
     setQuoteCardHoverEnabled(items.quoteCardHoverEnabled)
     setInPageHighlightsEnabled(items.bookshelfEnabled && items.bookshelfInPageHighlights)
     void refreshHighlightStatus()
@@ -132,6 +133,7 @@ if (window === window.top && !alreadyLoaded) {
   }
 
   const SETTINGS_DEFAULTS = {
+    customMediumHosts: [],
     selfCiteEnabled: true,
     quoteCardHoverEnabled: true,
     bookshelfEnabled: true,
@@ -159,7 +161,7 @@ if (window === window.top && !alreadyLoaded) {
   window.addEventListener('focus', () => reportPage(0))
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !(changes.selfCiteEnabled || changes.quoteCardHoverEnabled || changes.bookshelfEnabled || changes.bookshelfInPageHighlights || changes.enhancerProUnlocked || changes.enhancerProKey)) return
+    if (area !== 'local' || !(changes.customMediumHosts || changes.selfCiteEnabled || changes.quoteCardHoverEnabled || changes.bookshelfEnabled || changes.bookshelfInPageHighlights || changes.enhancerProUnlocked || changes.enhancerProKey)) return
     // Invalidate pending settings reads and close immediately on disable.
     settingsVersion++
     if (changes.selfCiteEnabled) {

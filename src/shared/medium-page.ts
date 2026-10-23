@@ -13,5 +13,18 @@ export const inspectMediumPage = () => {
   const feeds = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="alternate"][type="application/rss+xml"]'))
     .map(link => link.href)
     .filter(href => /^https?:\/\//i.test(href))
-  return { isMediumStory, feeds: [...new Set(feeds)] }
+  if (isMediumStory && feeds.length === 0) {
+    feeds.push(`${location.origin}/feed`)
+    for (const link of Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'))) {
+      try {
+        const url = new URL(link.href)
+        const handle = url.pathname.match(/^\/@([A-Za-z0-9_.-]+)(?:\/|$)/)?.[1]
+        if (url.protocol === 'https:' && url.hostname === 'medium.com' && handle) {
+          feeds.push(`https://medium.com/feed/@${handle}`)
+          break
+        }
+      } catch {}
+    }
+  }
+  return { isMediumStory, feeds: isMediumStory ? [...new Set(feeds)] : [] }
 }

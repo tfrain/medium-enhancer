@@ -58,6 +58,13 @@ highlights, quote card) must react to the content script's URL check
   `test/quote-hover-settings.test.ts`; a new `chrome.*` event in the worker needs
   a mock in the background tests.
 - Prove a new test can fail: break the code once, see it red, restore.
+- `onInstalled` must not `await` slow work before its existing steps: on 2026-10-23 an awaited
+  custom-domain reconcile delayed the What's New tab, which then stole focus from the story
+  page and broke `bookshelf.browser.mjs`. Run such work in the background (`void ...`).
+- Medium custom-domain publications (e.g. pub.huizhou92.com) are opt-in per host: the popup
+  offers "Enable Medium Enhancer on <host>" (optional host permission + registerContentScripts).
+  Never widen the static content-script matches to all sites. RSS there = `<host>/feed` plus
+  `medium.com/feed/@handle`, because those pages declare no RSS link.
 - Real Medium pages: headless Chromium is stopped by Cloudflare — do not evade it.
   Check selectors on a signed-out, isolated normal browser page instead.
 

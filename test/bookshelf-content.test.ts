@@ -18,7 +18,7 @@ const { saveCurrentStory, highlightCurrentStory } = loadSource('src/contents/lib
     sent.push(message)
     return message.action === 'status' ? { pro, saved, enabled: true } : { ok: true, archived: pro }
   } },
-  './quote-card': { readQuoteCard: () => ({ link: url }), quoteStoryRoot: () => ({}) },
+  './quote-card': { getCustomMediumHosts: () => [], readQuoteCard: () => ({ link: url }), quoteStoryRoot: () => ({}) },
   '../markdown/medium-to-markdown': { clipCurrentMediumArticleAsMarkdown: () => {
     conversions++
     if (conversionFails) throw new Error('Cannot read body')

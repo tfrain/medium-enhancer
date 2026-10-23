@@ -11,7 +11,7 @@ for (const navigateAt of ['status', 'save', 'none']) {
     window: { location, getSelection: () => ({ rangeCount: 1, isCollapsed: false, toString: () => 'selected', getRangeAt: () => ({ startContainer: { nodeType: 3, parentElement: paragraph } }) }) },
     document: { querySelector: (s: string) => s === 'article' ? { querySelector: () => ({ textContent: 'Title' }) } : null },
   }, {
-    './quote-card': { quoteStoryRoot: () => ({}), readQuoteCard: () => ({}) },
+    './quote-card': { getCustomMediumHosts: () => [], quoteStoryRoot: () => ({}), readQuoteCard: () => ({}) },
     '../markdown/medium-to-markdown': {},
     '../../shared/bookshelf-client': { bookshelfRequest: async (message: any) => {
       sent.push(message)

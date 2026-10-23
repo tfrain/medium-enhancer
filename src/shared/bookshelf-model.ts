@@ -39,13 +39,13 @@ export const requireBookshelfPro = (pro: boolean): void => {
 }
 const clean = (value: unknown): string => typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : ''
 
-export const normalizeItem = (metadata: BookshelfMetadata, existing?: BookshelfItem, now = Date.now()): BookshelfItem => {
-  const postId = mediumPostId(metadata.url)
+export const normalizeItem = (metadata: BookshelfMetadata, existing?: BookshelfItem, now = Date.now(), customHosts: readonly string[] = []): BookshelfItem => {
+  const postId = mediumPostId(metadata.url, customHosts)
   if (!postId) throw new Error('Open a supported Medium story to save it.')
   // The URL becomes an href on the Bookshelf page: store web URLs only.
   const web = (value?: string) => { try { return !!value && /^https?:$/.test(new URL(value).protocol) } catch { return false } }
   if (!web(metadata.url)) throw new Error('Open a supported Medium story to save it.')
-  const canonical = web(metadata.canonicalUrl) && mediumPostId(metadata.canonicalUrl!) === postId ? metadata.canonicalUrl! : metadata.url
+  const canonical = web(metadata.canonicalUrl) && mediumPostId(metadata.canonicalUrl!, customHosts) === postId ? metadata.canonicalUrl! : metadata.url
   const url = new URL(canonical)
   url.search = ''
   url.hash = ''

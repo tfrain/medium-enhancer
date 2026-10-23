@@ -1,8 +1,9 @@
+import { readCustomMediumHosts } from './shared/custom-medium-hosts'
 import { BookshelfPopup } from './components/bookshelf-popup'
 import { OBSIDIAN_SENT_MESSAGE } from "./shared/obsidian-clip"
 import { ARTICLE_URL } from "./shared/whats-new"
 import { inspectMediumPage } from "./shared/medium-page"
-import { classifyMediumUrl } from "./shared/medium-url"
+import { classifyMediumUrl, isMediumHost, isKnownMediumPublicationHost } from "./shared/medium-url"
 import "./popup.css"
 import { useState, useEffect } from "react"
 import { triggerMarkdownDownload } from "./shared/markdown-download"
@@ -64,6 +65,24 @@ function FeedCard({ feed }: { feed: Feed }) {
 type ClipStatus = "idle" | "working" | "done" | "error"
 
 function IndexPopup() {
+  const [enableTarget, setEnableTarget] = useState<{ host: string; tabId: number } | null>(null)
+  const [enableStatus, setEnableStatus] = useState('')
+  const [enabling, setEnabling] = useState(false)
+  const handleEnable = async () => {
+    if (!enableTarget) return
+    // Keep request in the click's user gesture, before any await.
+    const permission = chrome.permissions.request({ origins: [`https://${enableTarget.host}/*`] })
+    setEnabling(true)
+    setEnableStatus('')
+    try {
+      if (!await permission) { setEnableStatus('Site permission was not granted.'); return }
+      const result = await chrome.runtime.sendMessage({ type: 'enableCustomMediumHost', ...enableTarget })
+      if (!result?.ok) throw new Error(result?.error || 'Could not enable this site.')
+      setEnableTarget(null)
+      setEnableStatus('Enabled on this site.')
+    } catch (error) { setEnableStatus((error as Error).message) }
+    finally { setEnabling(false) }
+  }
   const [feeds, setFeeds] = useState<Feed[]>([])
   // null = loading, true = Medium article, false = not Medium
   const [isMediumPage, setIsMediumPage] = useState<boolean | null>(null)
@@ -114,10 +133,12 @@ function IndexPopup() {
     let activeTabIsMedium = false
     let disposed = false
 
-    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
       if (!tab || !tab.url) { setIsMediumPage(false); return }
       activeTabId = tab.id
-      activeTabIsMedium = !!classifyMediumUrl(tab.url)
+      const customHosts = await readCustomMediumHosts()
+      if (disposed) return
+      activeTabIsMedium = !!classifyMediumUrl(tab.url, customHosts)
       if (activeTabIsMedium) {
         const feedsKey = `feeds_${tab.id}`
         // Written by the background when this tab's content script reports (storage.session).
@@ -140,7 +161,14 @@ function IndexPopup() {
             const page = results[0]?.result
             activeTabIsMedium = !!page?.isMediumStory
             setIsMediumPage(activeTabIsMedium)
-            if (activeTabIsMedium) setFeeds(page.feeds.map(url => ({ name: 'RSS Feed', url: url.replace(/^https?:\/\//i, ''), type: 'publication' })))
+            if (activeTabIsMedium) {
+              const host = new URL(tab.url!).hostname
+              if (new URL(tab.url!).protocol === 'https:' && !isMediumHost(host) && !isKnownMediumPublicationHost(host, customHosts)) {
+                setEnableTarget({ host, tabId: tab.id! })
+              }
+              setFeeds(page.feeds.map(url => ({ name: 'RSS Feed', url: url.replace(/^https?:\/\//i, ''),
+                type: /^https:\/\/medium\.com\/feed\/@[A-Za-z0-9_.-]+$/.test(url) ? 'user' : 'publication' })))
+            }
           })
           .catch(() => { if (!disposed) setIsMediumPage(false) })
       }
@@ -201,6 +229,10 @@ function IndexPopup() {
       {clipStatus === 'done' && <p className="popup-message">{clipTarget === 'obsidian' ? 'Opened Obsidian' : clipTarget === 'copy' ? 'Markdown copied to the clipboard' : 'Saved to your Downloads folder'}</p>}
       {clipStatus === "error" && <p className="popup-message clip-error">{clipError}</p>}
 
+      {enableTarget && <button type="button" className="clip-markdown-btn" disabled={enabling} onClick={handleEnable}>
+        Enable Medium Enhancer on {enableTarget.host}
+      </button>}
+      {enableStatus && <p className="popup-message" role="status">{enableStatus}</p>}
       {renderBody()}
       <footer className="popup-footer">
         Follow me on Medium:&nbsp;

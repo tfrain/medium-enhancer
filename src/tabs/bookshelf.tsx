@@ -1,3 +1,4 @@
+import { readCustomMediumHosts } from '../shared/custom-medium-hosts'
 import { readBookshelfLibrary, exportBookshelfFiles, type BookshelfLibrary } from '../shared/bookshelf-library'
 import { isPro } from '../shared/pro'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -45,6 +46,7 @@ export default function Bookshelf() {
   const [busy, setBusy] = useState(false)
   const [deleted, setDeleted] = useState<{ token: string; title: string }>()
   const [obsidianEnabled, setObsidianEnabled] = useState(false)
+  const [customHosts, setCustomHosts] = useState<string[]>([])
   const [storyTabs, setStoryTabs] = useState<Record<string, number>>({})
   const refresh = useCallback(async () => {
     const result = await readBookshelfLibrary()
@@ -54,9 +56,11 @@ export default function Bookshelf() {
     setObsidianEnabled(settings.obsidianClipperEnabled)
     // Enumerate open tabs locally; Archive now never opens or fetches a story.
     const tabs = await chrome.tabs.query({})
+    const hosts = await readCustomMediumHosts()
+    setCustomHosts(hosts)
     const stories: Record<string, number> = {}
     for (const tab of tabs) {
-      const key = mediumPostId(tab.url || '')
+      const key = mediumPostId(tab.url || '', hosts)
       if (key && tab.id !== undefined) stories[key] = tab.id
     }
     setStoryTabs(stories)
@@ -66,7 +70,7 @@ export default function Bookshelf() {
     const update = () => { refresh().catch(error => setError(error.message)) }
     update()
     // Library data is in IndexedDB; storage only carries the settings this page shows.
-    const relevant = new Set(['bookshelfEnabled', 'obsidianClipperEnabled', 'enhancerProUnlocked', 'enhancerProKey'])
+    const relevant = new Set(['customMediumHosts', 'bookshelfEnabled', 'obsidianClipperEnabled', 'enhancerProUnlocked', 'enhancerProKey'])
     const onStorage = (changes: Record<string, chrome.storage.StorageChange>) => { if (Object.keys(changes).some(key => relevant.has(key))) update() }
     chrome.storage.onChanged.addListener(onStorage)
     window.addEventListener('focus', update)
@@ -170,7 +174,7 @@ export default function Bookshelf() {
         {(entry.highlightCount > 0 || !library.pro) && <div className={!library.pro ? 'shelf-locked' : ''}>
           <h3>Private highlights &amp; notes {proLabel}</h3>
           {library.pro && (grouped.get(item.key) || []).map(h => <section className="shelf-highlight" key={h.id}>
-            <blockquote>{h.text}</blockquote><a href={buildParagraphLink(item.url, h.paragraphId)} target="_blank" rel="noopener">Open paragraph</a>
+            <blockquote>{h.text}</blockquote><a href={buildParagraphLink(item.url, h.paragraphId, customHosts)} target="_blank" rel="noopener">Open paragraph</a>
             <Note highlight={h} onSave={(id, note) => perform(async () => { await bookshelfRequest({ action: 'note', id, note }) })} />
           </section>)}
         </div>}

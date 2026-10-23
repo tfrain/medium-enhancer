@@ -37,7 +37,7 @@ try {
     './lib/selection-highlight': { highlightModeFor: () => 'off', refreshHighlightStatus: async () => {}, runHighlight: async () => {} },
     './ui/self-cite-panel': { mountSelfCiteBall: () => { selfCiteMounted++ }, unmountSelfCiteBall: () => {} },
     './markdown/medium-to-markdown': {}, '../shared/obsidian-clip': {},
-    './lib/quote-card': { quoteStoryRoot: () => storyRoot },
+    './lib/quote-card': { quoteStoryRoot: () => storyRoot, setCustomMediumHosts: () => {} },
   })
   assert.equal(reads[0].defaults.quoteCardHoverEnabled, true, 'hover enabled by default')
   reads.shift()!.callback({ selfCiteEnabled: false, quoteCardHoverEnabled: true })

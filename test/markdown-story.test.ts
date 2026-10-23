@@ -30,6 +30,7 @@ const document = {
 try {
   const { clipCurrentMediumArticleAsMarkdown } = loadSource('src/contents/markdown/medium-to-markdown.ts', {
     Node: { TEXT_NODE: 3, ELEMENT_NODE: 1 }, document,
+    location: { origin: new URL(sourceUrl).origin },
     window: { location: { href: sourceUrl, hostname: 'medium.programmerscareer.com' } },
   }, { '../lib/extract': { extractArticle: () => { throw new Error('Medium story should use its article DOM') } } })
   const clip = clipCurrentMediumArticleAsMarkdown()

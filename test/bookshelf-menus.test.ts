@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { event, loadSource } from './load-source.ts'
 let pro = false
 let bookshelfEnabled = true
+let customMediumHosts: string[] = []
 let activeUrl = 'https://medium.com/@writer/story-abcdef123456'
 const menus = new Map<string, any>()
 const sent: any[] = []
@@ -13,7 +14,7 @@ const chrome = {
     sendMessage: async (_id: number, message: any) => { toasts.push(message) },
   },
   windows: { onFocusChanged: event() },
-  storage: { onChanged: event(), local: { get: async (defaults: any) => ({ ...defaults, bookshelfEnabled }) }, session: { set: async () => {}, remove: async () => {} } },
+  storage: { onChanged: event(), local: { get: async (defaults: any) => ({ ...defaults, bookshelfEnabled, customMediumHosts }) }, session: { set: async () => {}, remove: async () => {} } },
   action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {} },
   commands: { onCommand: event() },
   contextMenus: {
@@ -64,3 +65,12 @@ await flush()
 assert.equal(menus.get('bookshelf_save_menu').visible, false)
 assert.equal(menus.get('quote_card_menu').visible, true, 'independent quote-card menu remains available')
 console.log('PASS Bookshelf context-menu registration, story visibility, live toggle/Pro gates and save/highlight dispatch')
+
+bookshelfEnabled = true
+customMediumHosts = ['pub.huizhou92.com']
+activeUrl = 'https://pub.huizhou92.com/story-b61d5eda73ec'
+chrome.storage.onChanged.emit({ customMediumHosts: { newValue: customMediumHosts } }, 'local')
+await flush()
+assert.ok(menus.get('bookshelf_save_menu').documentUrlPatterns.includes('https://pub.huizhou92.com/*'))
+assert.equal(menus.get('bookshelf_save_menu').visible, true)
+console.log('PASS custom domain context-menu patterns and visibility')

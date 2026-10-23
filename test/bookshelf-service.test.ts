@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { loadSource } from './load-source.ts'
 let pro = false
 let enabled = true
+let customMediumHosts: string[] = []
 const items = new Map<string, any>()
 const highlights: any[] = []
 const db = {
@@ -13,7 +14,7 @@ const db = {
   deleteBookshelfItem: async (key: string) => { const item = items.get(key); items.delete(key); const saved = highlights.filter(h => h.itemKey === key); for (const h of saved) highlights.splice(highlights.indexOf(h), 1); return { item, highlights: saved } },
   restoreBookshelfItem: async (bundle: any) => { if (!items.has(bundle.item.key)) items.set(bundle.item.key, bundle.item); highlights.push(...bundle.highlights) },
 }
-const chrome = { runtime: { getURL: (p: string) => 'chrome-extension://test/' + p }, storage: { local: { get: async () => ({ bookshelfEnabled: enabled }) } } }
+const chrome = { runtime: { getURL: (p: string) => 'chrome-extension://test/' + p }, storage: { local: { get: async () => ({ bookshelfEnabled: enabled, customMediumHosts }) } } }
 const { handleBookshelfMessage: handle } = loadSource('src/shared/bookshelf-service.ts', { chrome, crypto, Date }, {
   './bookshelf-db': db, './pro': { isPro: async () => pro },
 })
@@ -72,3 +73,11 @@ pro = true
 await assert.rejects(() => send({ ...save, archiveOnly: true, metadata: { url: 'https://medium.com/p/111111111111', title: 'Other' } }, { ...sender, url: 'https://medium.com/p/111111111111' }), /save/i)
 await assert.rejects(() => send({ action: 'highlight', url: 'https://medium.com/p/111111111111', text: 'no saved story' }, { ...sender, url: 'https://medium.com/p/111111111111' }), /save/i)
 console.log('PASS Bookshelf background sender, toggle, free/Pro boundaries, redaction, archive, notes, dedupe and delete/undo')
+
+customMediumHosts = ['pub.huizhou92.com']
+const customUrl = 'https://pub.huizhou92.com/story-b61d5eda73ec'
+await send({ action: 'save', metadata: { url: customUrl, title: 'Custom story' } }, { tab: { id: 2, url: customUrl }, url: customUrl, frameId: 0 })
+assert.equal(items.get('b61d5eda73ec').url, customUrl)
+customMediumHosts = []
+await assert.rejects(() => send({ action: 'status' }, { tab: { id: 2 }, url: customUrl, frameId: 0 }), /story/i)
+console.log('PASS custom domain Bookshelf capture and removed-host rejection')

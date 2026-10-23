@@ -13,7 +13,8 @@ export const loadSource = (file: string, globals: Record<string, any>, overrides
     const exports = {}
     cache.set(filename, exports)
     const source = ts.transpileModule(readFileSync(filename, 'utf8'), {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+      fileName: filename,
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
     }).outputText
     runInNewContext(source, {
       console, URL, setTimeout, clearTimeout, ...globals, exports,

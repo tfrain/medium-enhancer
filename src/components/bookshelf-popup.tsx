@@ -1,3 +1,4 @@
+import { readCustomMediumHosts } from '../shared/custom-medium-hosts'
 import { useEffect, useState } from 'react'
 import { bookshelfRequest, bookshelfUrl, bookshelfProUrl } from '../shared/bookshelf-client'
 import { mediumPostId } from '../shared/medium-url'
@@ -14,7 +15,7 @@ export function BookshelfPopup() {
     const refresh = async () => {
       try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-        const postId = mediumPostId(tab?.url || '')
+        const postId = mediumPostId(tab?.url || '', await readCustomMediumHosts())
         const result = await bookshelfRequest({ action: 'status', key: postId || undefined })
         if (!disposed) { setTabId(tab?.id); setKey(postId || undefined); setStatus(result) }
       } catch (error) { if (!disposed) setFeedback((error as Error).message) }

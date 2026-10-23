@@ -2,11 +2,17 @@ import { QUOTE_NOISE_SELECTORS } from '../../shared/quote-hover'
 import { buildParagraphLink, mediumPostId } from '../../shared/medium-url'
 import { findParagraphId, normalizeQuote, type QuoteCard } from '../../shared/quote-card'
 
+let customMediumHosts: string[] = []
+export const setCustomMediumHosts = (hosts: unknown) => {
+  customMediumHosts = Array.isArray(hosts) ? hosts.filter((host): host is string => typeof host === 'string') : []
+}
+export const getCustomMediumHosts = () => customMediumHosts
+
 const textOf = (element: Element | null) => (element?.textContent || '').replace(/\s+/g, ' ').trim()
 const meta = (name: string) => document.querySelector<HTMLMetaElement>(`meta[name="${name}"], meta[property="${name}"]`)?.content?.trim() || ''
 
 export const quoteStoryRoot = (): HTMLElement | null =>
-  mediumPostId(window.location.href) ? document.querySelector('article') : null
+  mediumPostId(window.location.href, customMediumHosts) ? document.querySelector('article') : null
 
 const selectionElement = (node: Node | null): Element | null =>
   node?.nodeType === Node.ELEMENT_NODE ? node as Element : node?.parentElement || null
@@ -34,7 +40,7 @@ export const readQuoteCard = (fallbackNode?: Node | null): QuoteCard | null => {
   currentUrl.hash = ''
   currentUrl.search = ''
   const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href || ''
-  const canonicalUrl = mediumPostId(canonical) === mediumPostId(currentUrl.href) ? canonical : currentUrl.href
+  const canonicalUrl = mediumPostId(canonical, customMediumHosts) === mediumPostId(currentUrl.href, customMediumHosts) ? canonical : currentUrl.href
   const title = textOf(article.querySelector('h1')) || meta('og:title') || document.title || 'Untitled story'
   const author = meta('author') || textOf(article.querySelector('[data-testid="authorName"], .pw-author, a[rel="author"]')) || 'Unknown author'
   let publication = textOf(document.querySelector('[data-testid="publicationName"], [data-testid="storyPublicationName"], .pw-publication-name, a[href*="publication_info"], a[href*="publication_nav"]'))
@@ -50,5 +56,5 @@ export const readQuoteCard = (fallbackNode?: Node | null): QuoteCard | null => {
   }
   const siteName = meta('og:site_name')
   if (!publication && siteName && siteName.toLowerCase() !== 'medium') publication = siteName
-  return { quote: quote.text, truncated: quote.truncated, author, title, publication, link: buildParagraphLink(canonicalUrl, paragraphId) }
+  return { quote: quote.text, truncated: quote.truncated, author, title, publication, link: buildParagraphLink(canonicalUrl, paragraphId, customMediumHosts) }
 }

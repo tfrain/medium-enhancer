@@ -21,7 +21,7 @@ export const collectFeedSignals = () => {
       const u = new URL(anchor.href)
       const source = u.searchParams.get('source') || ''
       const text = (anchor.textContent || anchor.getAttribute('aria-label') || '').trim()
-      if (!/^\/@[^/?]+\/?$/.test(u.pathname)) return null
+      if (!/^\/@[A-Za-z0-9_.-]+(?:\/following)?\/?$/.test(u.pathname)) return null
       if (/post_responses|responses|comments/i.test(source)) return null
       if (/post_page|post_header|post_author|byline/i.test(source)) score += 8
       if (anchor.closest('article, main')) score += 3
