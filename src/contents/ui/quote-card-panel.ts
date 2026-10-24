@@ -1,4 +1,6 @@
 import { isPro } from '../../shared/pro'
+import { darkCss } from '../../shared/theme'
+import { themeElement } from '../lib/theme'
 import { normalizeQuote, QUOTE_SIZES, QUOTE_TEMPLATES, renderQuoteCard, type QuoteCard, type QuoteSize, type QuoteTemplate } from '../../shared/quote-card'
 import { readQuoteCard } from '../lib/quote-card'
 import { showToast } from '../util/toast'
@@ -49,6 +51,17 @@ const CSS = `
 #${TOOLBAR_ID} button:hover, #${TOOLBAR_ID} button:focus-visible { background: rgba(255,255,255,0.22); outline: none; }
 `
 
+// Panel chrome only; the card image keeps the style the user picked.
+const DARK_CSS = darkCss([PANEL_ID], `
+#${PANEL_ID} { background: #1e1e1e; color: #f0f0f0; border-color: #3a3a3a; }
+#${PANEL_ID} button { background: #2a2a2a; color: #e6e6e6; border-color: #444; }
+#${PANEL_ID} button[aria-pressed="true"] { border-color: #3dbb39; color: #6fd46c; background: #1d2b1d; }
+#${PANEL_ID} .me-qc-close { background: rgba(255,255,255,0.2); color: #fff; border: 0; }
+#${PANEL_ID} .me-qc-badge { background: #3a3a3a; }
+#${PANEL_ID} .me-qc-note { color: #aaa; }
+#${PANEL_ID} input { background: #151515; color: #eee; border-color: #444; }
+`)
+
 let panel: HTMLDivElement | null = null
 let panelCleanup: (() => void) | null = null
 let button: HTMLButtonElement | null = null // the toolbar's Card button
@@ -74,7 +87,7 @@ const ensureCSS = () => {
   if (document.getElementById(`${PANEL_ID}__style`)) return
   const style = document.createElement('style')
   style.id = `${PANEL_ID}__style`
-  style.textContent = CSS
+  style.textContent = CSS + DARK_CSS
   document.documentElement.appendChild(style)
 }
 
@@ -105,6 +118,7 @@ export const showQuoteCardPanel = async (card: QuoteCard) => {
   ensureCSS()
   const root = document.createElement('div')
   root.id = PANEL_ID
+  themeElement(root)
   root.setAttribute('role', 'dialog')
   root.setAttribute('aria-modal', 'true')
   root.tabIndex = -1

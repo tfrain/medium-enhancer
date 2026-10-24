@@ -28,6 +28,7 @@ const { default: Popup } = loadSource('src/popup.tsx', { chrome }, {
   react: React, 'react/jsx-runtime': { jsx, jsxs: jsx }, './popup.css': {},
   './components/bookshelf-popup': { BookshelfPopup: () => null },
   './shared/obsidian-clip': {}, './shared/markdown-download': {}, './shared/injection': {},
+  './shared/theme': { applyPageTheme: () => {} },
 })
 const render = () => { cursor = 0; const tree = Popup(); initial = false; return tree }
 const nodes = (tree: any): any[] => !tree || typeof tree !== 'object' ? [] : Array.isArray(tree) ? tree.flatMap(nodes) : [tree, ...nodes(tree.props?.children)]

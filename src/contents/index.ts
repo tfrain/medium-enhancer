@@ -11,6 +11,7 @@ import { quoteStoryRoot, setCustomMediumHosts } from './lib/quote-card'
 import { mountSelfCiteBall, unmountSelfCiteBall } from './ui/self-cite-panel'
 import { clipCurrentMediumArticleAsMarkdown } from './markdown/medium-to-markdown'
 import { sendClipToObsidian } from '../shared/obsidian-clip'
+import { setContentTheme } from './lib/theme'
 import type { PlasmoCSConfig } from "plasmo"
 
 // The context-menu click focuses the page, so the async clipboard API usually
@@ -138,6 +139,7 @@ if (window === window.top && !alreadyLoaded) {
     quoteCardHoverEnabled: true,
     bookshelfEnabled: true,
     bookshelfInPageHighlights: true,
+    theme: 'auto',
   }
 
   setSelectionHighlighter({ modeFor: highlightModeFor, run: runHighlight })
@@ -147,7 +149,9 @@ if (window === window.top && !alreadyLoaded) {
   const loadFeatures = () => {
     const version = ++settingsVersion
     chrome.storage.local.get(SETTINGS_DEFAULTS, items => {
-      if (version === settingsVersion) applyFeaturesForCurrentSite(items)
+      if (version !== settingsVersion) return
+      setContentTheme(items.theme)
+      applyFeaturesForCurrentSite(items)
     })
   }
   loadFeatures()
@@ -161,6 +165,7 @@ if (window === window.top && !alreadyLoaded) {
   window.addEventListener('focus', () => reportPage(0))
 
   chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.theme) setContentTheme(changes.theme.newValue)
     if (area !== 'local' || !(changes.customMediumHosts || changes.selfCiteEnabled || changes.quoteCardHoverEnabled || changes.bookshelfEnabled || changes.bookshelfInPageHighlights || changes.enhancerProUnlocked || changes.enhancerProKey)) return
     // Invalidate pending settings reads and close immediately on disable.
     settingsVersion++

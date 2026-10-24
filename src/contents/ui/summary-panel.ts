@@ -1,4 +1,6 @@
 import { getAiConfig, readAiSettings } from "../../shared/ai-defaults"
+import { darkCss } from "../../shared/theme"
+import { themeElement } from "../lib/theme"
 
 // In-page floating panel that streams an AI response from the background worker.
 // Used for the summary, comment explanations, and any custom user prompt.
@@ -98,25 +100,17 @@ const PANEL_CSS = `
 #${PANEL_ID} .me-sum-error {
   color: #c62828;
 }
-@media (prefers-color-scheme: dark) {
-  #${PANEL_ID} {
-    background: #1e1e1e;
-    color: #f0f0f0;
-    border-color: #3a3a3a;
-  }
-  #${PANEL_ID} .me-sum-col + .me-sum-col { border-left-color: #3a3a3a; }
-  #${PANEL_ID} .me-sum-col-label {
-    background: #252525;
-    border-bottom-color: #3a3a3a;
-    color: #aaa;
-  }
-  #${PANEL_ID} .me-sum-status {
-    background: #2a2a2a;
-    border-top-color: #3a3a3a;
-    color: #aaa;
-  }
-}
 `
+
+// Dark rules: forced by the Appearance setting, or following the system on Auto.
+const PANEL_DARK_CSS = darkCss([PANEL_ID], `
+#${PANEL_ID} { background: #1e1e1e; color: #f0f0f0; border-color: #3a3a3a; }
+#${PANEL_ID} .me-sum-col + .me-sum-col { border-left-color: #3a3a3a; }
+#${PANEL_ID} .me-sum-col-label { background: #252525; border-bottom-color: #3a3a3a; color: #aaa; }
+#${PANEL_ID} .me-sum-col-content.me-sum-pending { color: #777; }
+#${PANEL_ID} .me-sum-status { background: #2a2a2a; border-top-color: #3a3a3a; color: #aaa; }
+#${PANEL_ID} .me-sum-error { color: #ef5350; }
+`)
 
 type PanelRefs = {
   root: HTMLDivElement
@@ -135,7 +129,7 @@ const ensureStyle = () => {
   if (document.getElementById(`${PANEL_ID}__style`)) return
   const style = document.createElement('style')
   style.id = `${PANEL_ID}__style`
-  style.textContent = PANEL_CSS
+  style.textContent = PANEL_CSS + PANEL_DARK_CSS
   document.documentElement.appendChild(style)
 }
 
@@ -175,6 +169,7 @@ const buildPanel = (headline: string, translationLanguage: string): PanelRefs =>
 
   const root = document.createElement('div')
   root.id = PANEL_ID
+  themeElement(root)
 
   const header = document.createElement('div')
   header.className = 'me-sum-header'

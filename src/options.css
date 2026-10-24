@@ -11,8 +11,22 @@
   --field: #ffffff;
   --shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
 }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111418;
+  --card: #1a1e24;
+  --text: #e6e8eb;
+  --muted: #98a2b3;
+  --border: #2b313a;
+  --accent: #3dbb39;
+  --accent-soft: #1d2b1d;
+  --danger: #ef5350;
+  --field: #13171c;
+  --shadow: none;
+}
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #111418;
     --card: #1a1e24;
     --text: #e6e8eb;

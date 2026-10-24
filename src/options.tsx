@@ -7,6 +7,9 @@ import React, { useState, useEffect, useRef } from "react";
 import './options.css';
 import iconUrl from "data-base64:../assets/icon.png";
 import { ollamaPermissionPattern } from "./shared/site-access";
+import { applyPageTheme, normalizeTheme, saveTheme, THEMES, THEME_ICONS, THEME_LABELS, type Theme } from "./shared/theme";
+
+applyPageTheme();
 
 type Capability = {
 	key: string;
@@ -100,6 +103,38 @@ const formatModelLabel = (m: OllamaModelInfo): string => {
 	if (m.size) meta.push(formatSize(m.size));
 	if (meta.length) parts.push(`— ${meta.join(' · ')}`);
 	return parts.join(' ');
+};
+
+// Appearance: Auto follows the system; applies to the popup, Options,
+// Bookshelf and the panels Medium Enhancer opens on a story page.
+const AppearanceCard = () => {
+	const [theme, setTheme] = useState<Theme>(() => normalizeTheme(document.documentElement.dataset.theme));
+	useEffect(() => {
+		const onChange = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+			if (area === "local" && changes.theme) setTheme(normalizeTheme(changes.theme.newValue));
+		};
+		chrome.storage.onChanged.addListener(onChange);
+		return () => chrome.storage.onChanged.removeListener(onChange);
+	}, []);
+	const choose = (next: Theme) => {
+		setTheme(next);
+		document.documentElement.dataset.theme = next;
+		void saveTheme(next);
+	};
+	return (
+		<section className="card">
+			<h2>Appearance</h2>
+			<div className="segmented" role="radiogroup" aria-label="Theme">
+				{THEMES.map((t) => (
+					<button key={t} type="button" role="radio" aria-checked={theme === t}
+						className={theme === t ? "on" : ""} onClick={() => choose(t)}>
+						{THEME_ICONS[t]} {THEME_LABELS[t]}
+					</button>
+				))}
+			</div>
+			<p className="hint">Auto follows your system setting. Applies to the popup, Options, Bookshelf and the panels on story pages.</p>
+		</section>
+	);
 };
 
 const Options = () => {
@@ -463,6 +498,8 @@ const Options = () => {
 					</label>
 				))}
 			</section>
+
+			<AppearanceCard />
 
 			<section className="card">
 				<h2 id="pro">Pro</h2>

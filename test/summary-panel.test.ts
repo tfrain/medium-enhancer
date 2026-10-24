@@ -9,6 +9,8 @@ class Element extends EventTarget {
   children: Element[] = []
   parent: Element | null = null
   disabled = false
+  attributes: Record<string, string> = {}
+  setAttribute(name: string, value: string) { this.attributes[name] = value }
   classList = { add() {}, remove() {}, contains: () => false, toggle() {} }
   appendChild(child: Element) { this.children.push(child); child.parent = this; return child }
   remove() { if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this) }

@@ -25,6 +25,8 @@ import {
   type SelfCitePost,
 } from '../lib/self-cite'
 import { showToast } from '../util/toast'
+import { darkCss } from '../../shared/theme'
+import { themeElement } from '../lib/theme'
 
 const BALL_ID = '__me_selfcite_ball__'
 const PANEL_ID = '__me_selfcite_panel__'
@@ -120,6 +122,18 @@ const CSS = `
 }
 `
 
+const DARK_CSS = darkCss([PANEL_ID], `
+#${PANEL_ID} { background: #1e1e1e; border-color: #3a3a3a; }
+#${PANEL_ID} .me-sc-header { color: #f0f0f0; border-bottom-color: #333; }
+#${PANEL_ID} .me-sc-sub, #${PANEL_ID} .me-sc-meta, #${PANEL_ID} .me-sc-empty { color: #9a9a9a; }
+#${PANEL_ID} .me-sc-item { background: #1e1e1e; border-bottom-color: #2c2c2c; }
+#${PANEL_ID} .me-sc-item:hover { background: #2a2a2a; }
+#${PANEL_ID} .me-sc-title { color: #f0f0f0; }
+#${PANEL_ID} .me-sc-relevance.high { background: #1d3a26; color: #7fd89a; }
+#${PANEL_ID} .me-sc-relevance.mid { background: #3a3020; color: #f4c96b; }
+#${PANEL_ID} .me-sc-relevance.low { background: #333; color: #aaa; }
+`)
+
 let ballEl: HTMLButtonElement | null = null
 let panelEl: HTMLDivElement | null = null
 let requestVersion = 0
@@ -129,7 +143,7 @@ const ensureCSS = () => {
   if (document.getElementById(`${BALL_ID}__style`)) return
   const style = document.createElement('style')
   style.id = `${BALL_ID}__style`
-  style.textContent = CSS
+  style.textContent = CSS + DARK_CSS
   document.documentElement.appendChild(style)
 }
 
@@ -179,6 +193,7 @@ const renderPanel = (
   removePanel()
   const el = document.createElement('div')
   el.id = PANEL_ID
+  themeElement(el)
 
   const header = document.createElement('div')
   header.className = 'me-sc-header'

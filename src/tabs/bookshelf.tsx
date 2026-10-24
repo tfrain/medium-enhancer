@@ -11,6 +11,9 @@ import { triggerDownload } from '../shared/markdown-download'
 import { sendClipToObsidian, OBSIDIAN_SENT_MESSAGE } from '../shared/obsidian-clip'
 import { sendToTab } from '../shared/injection'
 import './bookshelf.css'
+import { applyPageTheme } from '../shared/theme'
+
+applyPageTheme()
 
 type Library = BookshelfLibrary
 function Note({ highlight, onSave }: { highlight: BookshelfHighlight; onSave: (id: number, note: string) => Promise<void> }) {

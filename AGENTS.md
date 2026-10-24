@@ -88,7 +88,21 @@ highlights, quote card) must react to the content script's URL check
    `source/zh-cn/tools/medium-enhancer/index.md`. Wesley adds screenshots to the
    Chinese post; sync the image lines to English. **Commit and push those files**
    (only those — the blog has other people's work in progress).
-4. Branches: push feature branches; Wesley merges. Never force-push.
+4. Work directly on main: commit and push (Wesley, 2026-10-24 — only we touch this repo, and he
+   loads this folder unpacked). No feature branches or PRs. Never force-push.
+
+## 7. Theme (0.11)
+
+- One setting, `theme` in chrome.storage.local: auto / light / dark (`src/shared/theme.ts`).
+  Options → Appearance and the popup header switch it.
+- Extension pages call `applyPageTheme()` at module top; it paints from a localStorage
+  copy first (synchronous), then follows chrome.storage. CSS: `:root[data-theme="dark"]`
+  plus the same values under `prefers-color-scheme` for `:root:not([data-theme="light"])`.
+- In-page panels: write dark rules once and wrap them in `darkCss([ids], css)`; call
+  `themeElement(root)` when creating the panel root. index.ts reads `theme` with the other
+  settings and calls `setContentTheme`. Never a bare `@media (prefers-color-scheme)` in a
+  panel — the Light setting could not turn it off (`test/theme.test.ts` checks).
+- Quote card images keep the style the user picked; the theme is for UI only.
 
 ## Known gaps (not bugs, decided later)
 

@@ -4,6 +4,7 @@ import { event, loadSource } from './load-source.ts'
 const changed = event()
 const reads: { defaults: any; callback: (items: any) => void }[] = []
 const hover: boolean[] = []
+const themes: unknown[] = []
 let resets = 0
 let selfCiteMounted = 0
 let storyRoot: object | null = null
@@ -38,10 +39,15 @@ try {
     './ui/self-cite-panel': { mountSelfCiteBall: () => { selfCiteMounted++ }, unmountSelfCiteBall: () => {} },
     './markdown/medium-to-markdown': {}, '../shared/obsidian-clip': {},
     './lib/quote-card': { quoteStoryRoot: () => storyRoot, setCustomMediumHosts: () => {} },
+    './lib/theme': { setContentTheme: (value: unknown) => themes.push(value) },
   })
   assert.equal(reads[0].defaults.quoteCardHoverEnabled, true, 'hover enabled by default')
-  reads.shift()!.callback({ selfCiteEnabled: false, quoteCardHoverEnabled: true })
+  assert.equal(reads[0].defaults.theme, 'auto', 'theme follows the system by default')
+  reads.shift()!.callback({ selfCiteEnabled: false, quoteCardHoverEnabled: true, theme: 'dark' })
   assert.equal(hover.at(-1), true)
+  assert.equal(themes.at(-1), 'dark', 'saved theme reaches in-page panels')
+  changed.emit({ theme: { newValue: 'light' } }, 'local')
+  assert.equal(themes.at(-1), 'light', 'theme changes apply at once')
   changed.emit({ quoteCardHoverEnabled: { newValue: false } }, 'sync')
   assert.equal(hover.at(-1), true, 'sync changes do not affect local toggle')
   changed.emit({ quoteCardHoverEnabled: { newValue: false } }, 'local')

@@ -1,12 +1,35 @@
-:root { color-scheme: light; font-family: system-ui, sans-serif; color: #233329; background: #f6f5f0; }
+:root {
+  color-scheme: light; font-family: system-ui, sans-serif;
+  --bg: #f6f5f0; --surface: #fffefb; --field: #ffffff; --text: #233329; --muted: #657369; --faint: #818980;
+  --border: #d4d9d0; --control: #b5c4b7; --pro-border: #c4cdc2; --link: #237333; --focus: #4c8655;
+  --pressed: #e3eddf; --snippet: #edf3e8; --quote: #91b185; --error: #a32a20;
+  --toast-bg: #233329; --toast-text: #ffffff; --shadow: #0002;
+  color: var(--text); background: var(--bg);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #151916; --surface: #1d221e; --field: #121613; --text: #dfe6e0; --muted: #9aa69d; --faint: #7c867e;
+  --border: #2f3830; --control: #415044; --pro-border: #3b463d; --link: #6fcf7d; --focus: #6fcf7d;
+  --pressed: #24352a; --snippet: #1f2a21; --quote: #4f7a46; --error: #ff8a7a;
+  --toast-bg: #dfe6e0; --toast-text: #151916; --shadow: #0006;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #151916; --surface: #1d221e; --field: #121613; --text: #dfe6e0; --muted: #9aa69d; --faint: #7c867e;
+    --border: #2f3830; --control: #415044; --pro-border: #3b463d; --link: #6fcf7d; --focus: #6fcf7d;
+    --pressed: #24352a; --snippet: #1f2a21; --quote: #4f7a46; --error: #ff8a7a;
+    --toast-bg: #dfe6e0; --toast-text: #151916; --shadow: #0006;
+  }
+}
 body { margin: 0; font-size: 15px; line-height: 1.55; }
 * { box-sizing: border-box; }
-a { color: #237333; text-underline-offset: 3px; }
+a { color: var(--link); text-underline-offset: 3px; }
 button, input, textarea { font: inherit; }
-button { background: white; border: 1px solid #b5c4b7; border-radius: 6px; padding: 6px 12px; color: #233329; cursor: pointer; }
-button:hover:not(:disabled), button[aria-pressed="true"] { background: #e3eddf; border-color: #237333; }
+button { background: var(--field); border: 1px solid var(--control); border-radius: 6px; padding: 6px 12px; color: var(--text); cursor: pointer; }
+button:hover:not(:disabled), button[aria-pressed="true"] { background: var(--pressed); border-color: var(--link); }
 button:disabled, input:disabled { opacity: .5; cursor: default; }
-:focus-visible { outline: 3px solid #4c8655; outline-offset: 3px; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .shelf { max-width: 1080px; margin: auto; padding: 48px 24px; }
 .shelf-header { display: flex; gap: 24px; justify-content: space-between; align-items: baseline; margin-bottom: 30px; }
 .shelf-header p { max-width: 630px; }
@@ -14,27 +37,27 @@ button:disabled, input:disabled { opacity: .5; cursor: default; }
 h1 { font: 48px Georgia, serif; margin: 8px 0; }
 h2 { font: 26px Georgia, serif; margin: 0 0 8px; }
 h3 { font-size: 15px; margin-top: 24px; }
-.shelf-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 20px; border-block: 1px solid #d4d9d0; padding: 20px 0; }
+.shelf-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 20px; border-block: 1px solid var(--border); padding: 20px 0; }
 .shelf-filters { display: flex; gap: 4px; }
 .shelf-search { flex: 1; min-width: 220px; font-size: 13px; }
-input, textarea { display: block; width: 100%; padding: 8px 10px; border: 1px solid #b5c4b7; border-radius: 6px; background: white; }
+input, textarea { display: block; width: 100%; padding: 8px 10px; border: 1px solid var(--control); border-radius: 6px; background: var(--field); color: var(--text); }
 .shelf-search input { margin-top: 4px; }
-.shelf-count, .shelf-byline { font-size: 13px; color: #657369; }
+.shelf-count, .shelf-byline { font-size: 13px; color: var(--muted); }
 .shelf-list { display: grid; gap: 18px; }
-.shelf-item { padding: 26px; border: 1px solid #d4d9d0; border-radius: 10px; background: #fffefb; overflow-wrap: anywhere; }
+.shelf-item { padding: 26px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow-wrap: anywhere; }
 .shelf-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 18px 0; }
-.shelf-pro { font: 11px system-ui, sans-serif; color: #66726a; border: 1px solid #c4cdc2; border-radius: 4px; padding: 1px 5px; margin-left: 5px; white-space: nowrap; }
-.shelf-locked { color: #818980; }
-.shelf-snippet { background: #edf3e8; padding: 12px; border-radius: 6px; }
-.shelf-error { color: #a32a20; }
-.shelf-toast { position: sticky; top: 12px; z-index: 1; padding: 14px 20px; background: #233329; color: white; border-radius: 8px; box-shadow: 0 4px 20px #0002; }
+.shelf-pro { font: 11px system-ui, sans-serif; color: var(--muted); border: 1px solid var(--pro-border); border-radius: 4px; padding: 1px 5px; margin-left: 5px; white-space: nowrap; }
+.shelf-locked { color: var(--faint); }
+.shelf-snippet { background: var(--snippet); padding: 12px; border-radius: 6px; }
+.shelf-error { color: var(--error); }
+.shelf-toast { position: sticky; top: 12px; z-index: 1; padding: 14px 20px; background: var(--toast-bg); color: var(--toast-text); border-radius: 8px; box-shadow: 0 4px 20px var(--shadow); }
 .shelf-toast button { margin-left: 12px; }
-summary { cursor: pointer; color: #237333; }
-.shelf-archive { white-space: pre-wrap; overflow-wrap: anywhere; font: 14px/1.7 ui-monospace, monospace; max-height: 600px; overflow: auto; padding: 16px; background: #f6f5f0; }
-.shelf-highlight { border-top: 1px solid #d4d9d0; padding: 12px 0; }
-blockquote { border-left: 3px solid #91b185; padding-left: 18px; margin-left: 0; }
+summary { cursor: pointer; color: var(--link); }
+.shelf-archive { white-space: pre-wrap; overflow-wrap: anywhere; font: 14px/1.7 ui-monospace, monospace; max-height: 600px; overflow: auto; padding: 16px; background: var(--bg); }
+.shelf-highlight { border-top: 1px solid var(--border); padding: 12px 0; }
+blockquote { border-left: 3px solid var(--quote); padding-left: 18px; margin-left: 0; }
 .shelf-note { display: grid; gap: 8px; margin-top: 12px; }
 .shelf-note label { font-size: 13px; }
 .shelf-note button { justify-self: start; }
-.shelf footer { color: #657369; font-size: 13px; margin-top: 36px; }
+.shelf footer { color: var(--muted); font-size: 13px; margin-top: 36px; }
 @media (max-width: 600px) { .shelf { padding: 24px 16px; } .shelf-item { padding: 18px; } .shelf-header { display: block; } h1 { font-size: 40px; } }

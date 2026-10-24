@@ -8,6 +8,9 @@ import "./popup.css"
 import { useState, useEffect } from "react"
 import { triggerMarkdownDownload } from "./shared/markdown-download"
 import { sendToTab } from "./shared/injection"
+import { applyPageTheme, nextTheme, normalizeTheme, saveTheme, THEME_ICONS, THEME_LABELS, type Theme } from "./shared/theme"
+
+applyPageTheme()
 
 interface Feed {
   name: string
@@ -63,6 +66,18 @@ function FeedCard({ feed }: { feed: Feed }) {
 }
 
 type ClipStatus = "idle" | "working" | "done" | "error"
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState<Theme>(() => normalizeTheme(document.documentElement.dataset.theme))
+  const change = () => {
+    const next = nextTheme(theme)
+    setTheme(next)
+    document.documentElement.dataset.theme = next
+    void saveTheme(next)
+  }
+  return <button type="button" className="theme-toggle" onClick={change}
+    title={`Theme: ${THEME_LABELS[theme]} (click to change)`}>{THEME_ICONS[theme]} {THEME_LABELS[theme]}</button>
+}
 
 function IndexPopup() {
   const [enableTarget, setEnableTarget] = useState<{ host: string; tabId: number } | null>(null)
@@ -209,7 +224,10 @@ function IndexPopup() {
 
   return (
     <div className="popup-root">
-      <div className="popup-header">RSS Feeds</div>
+      <div className="popup-title-row">
+        <div className="popup-header">RSS Feeds</div>
+        <ThemeToggle />
+      </div>
       <BookshelfPopup />
 
       <div className="clip-actions">

@@ -1,5 +1,6 @@
 import toastCSS from '../style/toast.css'
 import { addCSS } from './dom/css'
+import { themeElement } from '../lib/theme'
 
 function setClass(
   elem: HTMLElement,
@@ -25,6 +26,7 @@ export function showToast(msg: string) {
   if (!toast) {
     toast = document.createElement('DIV')
     toast.id = 'mediumtoc-toast'
+    themeElement(toast)
     document.body.appendChild(toast)
   }
   toast.textContent = msg
