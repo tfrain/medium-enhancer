@@ -8,7 +8,7 @@ import "./popup.css"
 import { useState, useEffect } from "react"
 import { triggerMarkdownDownload } from "./shared/markdown-download"
 import { sendToTab } from "./shared/injection"
-import { applyPageTheme, nextTheme, normalizeTheme, saveTheme, THEME_ICONS, THEME_LABELS, type Theme } from "./shared/theme"
+import { applyPageTheme, normalizeTheme, saveTheme, THEMES, THEME_ICONS, THEME_LABELS, type Theme } from "./shared/theme"
 
 applyPageTheme()
 
@@ -67,16 +67,22 @@ function FeedCard({ feed }: { feed: Feed }) {
 
 type ClipStatus = "idle" | "working" | "done" | "error"
 
-function ThemeToggle() {
+// Three buttons, not a cycling one: a cycling button showed the current theme
+// and switched to the next, so clicking "Dark" made it Auto (Wesley, 2026-10-24).
+function ThemeSwitch() {
   const [theme, setTheme] = useState<Theme>(() => normalizeTheme(document.documentElement.dataset.theme))
-  const change = () => {
-    const next = nextTheme(theme)
+  const choose = (next: Theme) => {
+    if (next === theme) return
     setTheme(next)
     document.documentElement.dataset.theme = next
     void saveTheme(next)
   }
-  return <button type="button" className="theme-toggle" onClick={change}
-    title={`Theme: ${THEME_LABELS[theme]} (click to change)`}>{THEME_ICONS[theme]} {THEME_LABELS[theme]}</button>
+  return <div className="theme-switch" role="radiogroup" aria-label="Theme">
+    {THEMES.map(t => <button key={t} type="button" role="radio" aria-checked={theme === t}
+      className={theme === t ? 'on' : ''} title={`Theme: ${THEME_LABELS[t]}`} onClick={() => choose(t)}>
+      {t === 'auto' ? `${THEME_ICONS[t]} ${THEME_LABELS[t]}` : THEME_ICONS[t]}
+    </button>)}
+  </div>
 }
 
 function IndexPopup() {
@@ -226,7 +232,7 @@ function IndexPopup() {
     <div className="popup-root">
       <div className="popup-title-row">
         <div className="popup-header">RSS Feeds</div>
-        <ThemeToggle />
+        <ThemeSwitch />
       </div>
       <BookshelfPopup />
 

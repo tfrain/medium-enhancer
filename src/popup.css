@@ -197,8 +197,10 @@ body {
 .bookshelf-popup a { color: var(--link); }
 
 .popup-title-row { display: flex; align-items: center; justify-content: space-between; }
-.theme-toggle {
-  font-size: 11px; padding: 2px 8px; border-radius: 10px; cursor: pointer;
-  background: transparent; color: var(--text-secondary); border: 1px solid var(--border);
+.theme-switch { display: flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.theme-switch button {
+  font-size: 11px; padding: 2px 7px; cursor: pointer; border: 0;
+  background: transparent; color: var(--text-secondary);
 }
-.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+.theme-switch button:hover { color: var(--accent); }
+.theme-switch button.on { background: var(--accent); color: #ffffff; cursor: default; }

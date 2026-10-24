@@ -69,4 +69,12 @@ const load = (local: Record<string, string> = {}, stored: Record<string, unknown
   }
 }
 
+{
+  // A cycling button showed the current theme and switched to the next, so
+  // clicking "Dark" made it Auto. Each choice is its own button now.
+  const popup = readFileSync('src/popup.tsx', 'utf8')
+  assert.ok(!popup.includes('nextTheme('), 'popup theme control does not cycle')
+  assert.ok(popup.includes('THEMES.map('), 'popup offers each theme as its own button')
+}
+
 console.log('PASS theme: normalize, cycle, darkCss scoping, first paint from cache, live changes, panels themed')
