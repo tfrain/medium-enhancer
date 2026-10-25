@@ -2,6 +2,7 @@ import { readCustomMediumHosts } from './shared/custom-medium-hosts'
 import { BookshelfPopup } from './components/bookshelf-popup'
 import { OBSIDIAN_SENT_MESSAGE } from "./shared/obsidian-clip"
 import { ARTICLE_URL } from "./shared/whats-new"
+import { SUPPORT_URL } from "./shared/support"
 import { inspectMediumPage } from "./shared/medium-page"
 import { classifyMediumUrl, isMediumHost, isKnownMediumPublicationHost } from "./shared/medium-url"
 import "./popup.css"
@@ -268,6 +269,7 @@ function IndexPopup() {
         <a href={ARTICLE_URL} target="_blank" rel="noopener noreferrer">
           comment on this article
         </a>
+        <a className="support-link" href={SUPPORT_URL} target="_blank" rel="noopener noreferrer">☕ Support me on Ko-fi</a>
       </footer>
     </div>
   )

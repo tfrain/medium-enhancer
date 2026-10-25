@@ -2,6 +2,7 @@ import { readCustomMediumHosts } from './shared/custom-medium-hosts';
 import { DEFAULT_AI_PROVIDER, DEFAULT_OLLAMA_URL, DEFAULT_MODELS, getAiConfig, readAiSettings, type AiProvider } from "./shared/ai-defaults";
 import { PRO_GET_KEY_URL, canGetProKey, proStatus, tryUnlock, type ProStatus } from "./shared/pro";
 import { ARTICLE_URL } from "./shared/whats-new"
+import { SUPPORT_URL } from "./shared/support";
 import { readStreamLines } from "./shared/stream-lines";
 import React, { useState, useEffect, useRef } from "react";
 import './options.css';
@@ -667,7 +668,8 @@ const Options = () => {
 			<footer className="opt-foot">
 				Medium Enhancer v{version} ·{" "}
 				<a href={ARTICLE_URL} target="_blank" rel="noopener">Feedback</a> ·{" "}
-				by <a href="https://wesley-wei.medium.com/" target="_blank" rel="noopener">Wesley Wei</a>
+				by <a href="https://wesley-wei.medium.com/" target="_blank" rel="noopener">Wesley Wei</a> ·{" "}
+				<a href={SUPPORT_URL} target="_blank" rel="noopener">☕ Support</a>
 			</footer>
 
 			<div className={`toast ${statusMessage ? "show" : ""}`} role="status">{statusMessage}</div>
