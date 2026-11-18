@@ -9,6 +9,7 @@ import { OBSIDIAN_SENT_MESSAGE } from "./shared/obsidian-clip"
 import { createObsidianAdvancedUri } from "./shared/obsidian-uri"
 import { triggerMarkdownDownload, triggerPngDownload } from "./shared/markdown-download"
 import { sendToTab } from "./shared/injection"
+import { registerReaderInterestTap } from "./shared/main-world"
 
 interface Feed {
   name: string;
@@ -311,14 +312,20 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if ((area === 'local' || area === 'sync') && (changes.enhancerProKey || changes.enhancerProUnlocked)) void updateQuoteCardMenu()
 })
 
+const ensureReaderInterestTap = () => {
+  void registerReaderInterestTap().catch(error => console.warn('[bg] Reader Interests tap registration failed', error))
+}
+
 chrome.runtime.onStartup.addListener(() => {
   ensureContextMenus();
   ensureOllamaDnrRule();
+  ensureReaderInterestTap();
 });
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   // Not awaited: install/update work (menus, the What's New tab) must not wait on it.
   void reconcileCustomMediumHosts().catch(error => console.warn('[bg] custom domain registration failed', error))
+  ensureReaderInterestTap();
   ensureContextMenus();
   // Per-tab feeds moved to storage.session in 0.10; drop the old local copies.
   chrome.storage.local.get(null).then(all => chrome.storage.local.remove(Object.keys(all).filter(k => k.startsWith('feeds_')))).catch(() => {})

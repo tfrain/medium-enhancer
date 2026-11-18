@@ -18,7 +18,9 @@ export const loadSource = (file: string, globals: Record<string, any>, overrides
     }).outputText
     runInNewContext(source, {
       console, URL, setTimeout, clearTimeout, ...globals, exports,
-      require: (name: string) => name in overrides ? overrides[name] : name.startsWith('.')
+      // Plasmo `url:` imports become the bundled file's URL; tests get its base name.
+      require: (name: string) => name in overrides ? overrides[name] : name.startsWith('url:')
+        ? { __esModule: true, default: `chrome-extension://test/${name.split('/').pop()}.js` } : name.startsWith('.')
         ? load(resolve(dirname(filename), name + '.ts')) : require(name),
     }, { filename })
     return exports

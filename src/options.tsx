@@ -49,6 +49,11 @@ const CAPABILITIES: Capability[] = [
 		label: "Cite My Story",
 		description: "In the Medium editor, suggests your own related past stories to link.",
 	},
+	{
+		key: "readerInterestEnabled",
+		label: "Reader Interests",
+		description: "Pro: on a Medium profile's Activity tab, shows what that reader claps, highlights and responds to — top tags, writers, and which of your stories they engaged with. Uses only what the page already loaded; nothing is saved.",
+	},
 ];
 
 const BOOL_DEFAULTS: Record<string, boolean> = CAPABILITIES.reduce((acc, c) => {

@@ -9,6 +9,7 @@ import { mountQuoteCardButton, openQuoteCardFromSelection, resetQuoteCard, setQu
 import { highlightModeFor, refreshHighlightStatus, runHighlight } from './lib/selection-highlight'
 import { quoteStoryRoot, setCustomMediumHosts } from './lib/quote-card'
 import { mountSelfCiteBall, unmountSelfCiteBall } from './ui/self-cite-panel'
+import { mountReaderInterest, unmountReaderInterest } from './ui/reader-interest-panel'
 import { clipCurrentMediumArticleAsMarkdown } from './markdown/medium-to-markdown'
 import { sendClipToObsidian } from '../shared/obsidian-clip'
 import { setContentTheme } from './lib/theme'
@@ -131,11 +132,15 @@ if (window === window.top && !alreadyLoaded) {
     } else {
       unmountSelfCiteBall()
     }
+    // Pro is checked when the panel opens; the button only shows on profile pages.
+    if (items.readerInterestEnabled) mountReaderInterest()
+    else unmountReaderInterest()
   }
 
   const SETTINGS_DEFAULTS = {
     customMediumHosts: [],
     selfCiteEnabled: true,
+    readerInterestEnabled: true,
     quoteCardHoverEnabled: true,
     bookshelfEnabled: true,
     bookshelfInPageHighlights: true,
@@ -166,13 +171,14 @@ if (window === window.top && !alreadyLoaded) {
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.theme) setContentTheme(changes.theme.newValue)
-    if (area !== 'local' || !(changes.customMediumHosts || changes.selfCiteEnabled || changes.quoteCardHoverEnabled || changes.bookshelfEnabled || changes.bookshelfInPageHighlights || changes.enhancerProUnlocked || changes.enhancerProKey)) return
+    if (area !== 'local' || !(changes.customMediumHosts || changes.selfCiteEnabled || changes.readerInterestEnabled || changes.quoteCardHoverEnabled || changes.bookshelfEnabled || changes.bookshelfInPageHighlights || changes.enhancerProUnlocked || changes.enhancerProKey)) return
     // Invalidate pending settings reads and close immediately on disable.
     settingsVersion++
     if (changes.selfCiteEnabled) {
       if (changes.selfCiteEnabled.newValue ?? true) mountSelfCiteBall()
       else unmountSelfCiteBall()
     }
+    if (changes.readerInterestEnabled && changes.readerInterestEnabled.newValue === false) unmountReaderInterest()
     if (changes.quoteCardHoverEnabled) setQuoteCardHoverEnabled(changes.quoteCardHoverEnabled.newValue ?? true)
     loadFeatures()
   })

@@ -99,9 +99,18 @@ if (mode === 'enable') {
   for (let i = 0; i < 50; i++) await new Promise(resolve => setImmediate(resolve)) // reconcile runs in the background
   assert.equal(registrations.has(`me-custom-${host}`), true)
   assert.equal(registrations.has('me-custom-stale.test'), false)
+  // Reader Interests tap: MAIN world, and a second install/update replaces it
+  // (registerContentScripts above throws on a duplicate id).
+  assert.deepEqual(JSON.parse(JSON.stringify(registrations.get('me-reader-interest-tap'))), {
+    id: 'me-reader-interest-tap', js: ['reader-interest-tap.js'], matches: ['https://*.medium.com/*'],
+    runAt: 'document_start', world: 'MAIN', persistAcrossSessions: true,
+  })
   permitted = false
+  // An update ships a new hashed file name while the old registration is still there.
+  registrations.set('me-reader-interest-tap', { id: 'me-reader-interest-tap', js: ['reader-interest-tap.0ld.js'] })
   await [...chrome.runtime.onInstalled.listeners][0]({ reason: 'update', previousVersion: '0.0.0' })
   for (let i = 0; i < 50; i++) await new Promise(resolve => setImmediate(resolve)) // reconcile runs in the background
-  assert.equal(registrations.size, 0, 'no registration without current permission')
+  assert.deepEqual([...registrations.keys()], ['me-reader-interest-tap'], 'no custom-domain registration without current permission')
+  assert.deepEqual([...registrations.get('me-reader-interest-tap').js], ['reader-interest-tap.js'], 'stale tap file replaced after an update')
 }
 console.log(`PASS custom domains ${mode}`)

@@ -37,6 +37,7 @@ try {
     },
     './lib/selection-highlight': { highlightModeFor: () => 'off', refreshHighlightStatus: async () => {}, runHighlight: async () => {} },
     './ui/self-cite-panel': { mountSelfCiteBall: () => { selfCiteMounted++ }, unmountSelfCiteBall: () => {} },
+    './ui/reader-interest-panel': { mountReaderInterest: () => {}, unmountReaderInterest: () => {} },
     './markdown/medium-to-markdown': {}, '../shared/obsidian-clip': {},
     './lib/quote-card': { quoteStoryRoot: () => storyRoot, setCustomMediumHosts: () => {} },
     './lib/theme': { setContentTheme: (value: unknown) => themes.push(value) },

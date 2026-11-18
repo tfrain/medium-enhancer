@@ -57,7 +57,7 @@ const load = (local: Record<string, string> = {}, stored: Record<string, unknown
 
 {
   // Every in-page panel's dark rules go through darkCss, so the Light setting can switch them off.
-  for (const file of ['src/contents/ui/summary-panel.ts', 'src/contents/ui/quote-card-panel.ts', 'src/contents/ui/self-cite-panel.ts']) {
+  for (const file of ['src/contents/ui/summary-panel.ts', 'src/contents/ui/quote-card-panel.ts', 'src/contents/ui/self-cite-panel.ts', 'src/contents/ui/reader-interest-panel.ts']) {
     const src = readFileSync(file, 'utf8')
     assert.ok(!src.includes('@media (prefers-color-scheme'), `${file}: no bare system dark rules`)
     assert.ok(src.includes('darkCss(') && src.includes('themeElement('), `${file}: themed`)

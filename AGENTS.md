@@ -104,6 +104,22 @@ highlights, quote card) must react to the content script's URL check
   panel — the Light setting could not turn it off (`test/theme.test.ts` checks).
 - Quote card images keep the style the user picked; the theme is for UI only.
 
+## 8. Reader Interests (Pro, 0.12)
+
+- On a Medium profile page, the "Reader interests" button shows what that reader claps,
+  highlights and responds to. Wesley chose this over bulk-fetching every reader of a story
+  (2026-11-18): **no request of our own** — `src/page/reader-interest-tap.ts` (MAIN world)
+  copies only the answers Medium's page already fetched (`UserActivitiesQuery`,
+  `UserCatalogsListQuery`, `NavBarQuery`). Never add a fetch, paging loop or background crawl;
+  Wesley's signed-in account would be the one doing it.
+- Memory only: nothing goes to storage, Bookshelf or the network. "Copy as Markdown" is the
+  only way out, by the user's click.
+- The tap is registered by `src/shared/main-world.ts` (unregister, then register: the hashed
+  file name changes on update). Keep it out of `src/contents/`, where Plasmo would register it
+  itself and swallow a failed registration.
+- Parsing and weights (highlight 3, response 2, clap 1) live in `src/shared/reader-interest.ts`;
+  `test/reader-interest.test.ts` uses synthetic data in the shape of a real capture.
+
 ## Known gaps (not bugs, decided later)
 
 Cross-paragraph highlights don't re-mark in the page; the delete-undo bundle
