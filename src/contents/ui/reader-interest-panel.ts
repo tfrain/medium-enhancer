@@ -206,7 +206,7 @@ const renderPanel = () => {
     copy.type = 'button'
     copy.addEventListener('click', async () => {
       try {
-        await navigator.clipboard.writeText(summaryMarkdown(name, s, profile.lists))
+        await navigator.clipboard.writeText(summaryMarkdown(name, s, profile.lists, profile.hasMore))
         showToast('Reader interests copied as Markdown.')
       } catch {
         showToast('Copy failed. Please try again.')

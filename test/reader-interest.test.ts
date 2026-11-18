@@ -77,6 +77,8 @@ const actResult = (hasNextPage: boolean) => ({ data: { userActivitiesConnection:
   const md = ri.summaryMarkdown('Reader1', s, [{ name: 'math', count: 2 }])
   assert.ok(md.includes('# Reader interests: @Reader1') && md.includes('> dwarfs are') && md.includes('math (2)'))
   assert.equal(ri.countsLine(s), '4 activities (2 claps, 1 response, 1 highlight)')
+  assert.ok(!md.includes('Partial'), 'complete history: no partial note')
+  assert.ok(ri.summaryMarkdown('Reader1', s, null, true).includes('Partial: Medium has older activity'), 'more pages left: says so')
   console.log('PASS Reader Interests weights highlights 3, responses 2, claps 1 and finds your stories')
 }
 

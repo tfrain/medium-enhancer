@@ -244,9 +244,10 @@ export const formatDay = (ms: number): string =>
   ms ? new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
 
 /** Markdown for notes / topic ideas: public activity only, no account data. */
-export const summaryMarkdown = (username: string, s: ReaderSummary, lists: ReaderList[] | null): string => {
+export const summaryMarkdown = (username: string, s: ReaderSummary, lists: ReaderList[] | null, hasMore = false): string => {
   const lines: string[] = [`# Reader interests: @${username || 'unknown'}`, '']
-  lines.push(`Based on ${countsLine(s)}, ${formatDay(s.from)} – ${formatDay(s.to)}.`, '')
+  lines.push(`Based on ${countsLine(s)}, ${formatDay(s.from)} – ${formatDay(s.to)}.` +
+    (hasMore ? ' Partial: Medium has older activity that was not loaded.' : ''), '')
   if (s.yourStories.length) {
     lines.push('## Your stories they engaged with')
     for (const a of s.yourStories) lines.push(`- ${kindLabel(a.kind)}: [${a.title}](${a.url})`)
